@@ -1,10 +1,5 @@
 import React, { useState, useEffect } from 'react';
 
-// URL de exportação pública do Google Sheets (formato CSV)
-// O documento precisa estar configurado como "Qualquer pessoa com o link pode visualizar"
-const SHEET_ID = '1se2lClYqObX9HV8dTfCR3nKsFZzMbbbIpDKv-WhrAfU';
-const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv`;
-
 // Cores da paleta Mondrian solicitada
 const MONDRIAN_COLORS = [
   'bg-[#c41e3a]', // Carmesim
@@ -23,23 +18,29 @@ export default function App() {
   const [editValue, setEditValue] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  // URL da API do Google Apps Script
-  // Substitua a string abaixo pela URL gerada no seu Google Apps Script (Web App)
-  const API_URL = "COLOQUE_AQUI_A_URL_DO_WEB_APP_GERADA_NO_APPS_SCRIPT";
+  // A MÁGICA ACONTECE AQUI:
+  // Adaptado para contornar limitações de compilação do ambiente
+  const API_URL = (typeof process !== 'undefined' && process.env && process.env.VITE_GOOGLE_SCRIPT_URL) 
+    ? process.env.VITE_GOOGLE_SCRIPT_URL 
+    : ""; // Se o erro persistir, pode colar a URL gerada pelo Google Apps Script diretamente entre estas aspas
 
   const fetchData = async () => {
     setLoading(true);
     setError(null);
     try {
+      if (!API_URL) {
+        throw new Error("A variável VITE_GOOGLE_SCRIPT_URL não foi encontrada no Vercel.");
+      }
+
       // Agora buscamos diretamente o JSON da nossa API do Google Apps Script
       const response = await fetch(API_URL);
-      if (!response.ok) throw new Error('Falha ao acessar os dados da API.');
+      if (!response.ok) throw new Error('Falha ao aceder aos dados da API.');
       
       const jsonData = await response.json();
       setData(jsonData);
     } catch (err) {
       console.error(err);
-      setError('Não foi possível carregar os dados. Verifique a URL do Web App (API_URL).');
+      setError('Não foi possível carregar os dados. Verifique a URL do Web App (API_URL). ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -67,11 +68,11 @@ export default function App() {
         );
         setEditingId(null);
       } else {
-        alert("Erro ao salvar: " + result.message);
+        alert("Erro ao guardar: " + result.message);
       }
     } catch (error) {
       console.error(error);
-      alert("Erro de comunicação ao salvar a observação.");
+      alert("Erro de comunicação ao guardar a observação.");
     } finally {
       setIsSaving(false);
     }
@@ -149,7 +150,7 @@ export default function App() {
         {/* MENSAGENS DE ESTADO */}
         {loading && (
           <div className="text-center p-20 border-[6px] border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-            <h2 className="text-3xl font-black uppercase animate-pulse">Carregando Dados...</h2>
+            <h2 className="text-3xl font-black uppercase animate-pulse">A Carregar Dados...</h2>
           </div>
         )}
 
@@ -161,7 +162,7 @@ export default function App() {
               <path d="M12 16h.01"/>
             </svg>
             <div>
-              <h2 className="text-2xl font-black uppercase mb-2">Erro de Conexão</h2>
+              <h2 className="text-2xl font-black uppercase mb-2">Erro de Ligação</h2>
               <p className="font-bold text-lg">{error}</p>
             </div>
           </div>
@@ -280,7 +281,7 @@ export default function App() {
                               className={`px-3 py-1 border-2 border-black text-xs font-black uppercase text-white ${MONDRIAN_COLORS[1]} hover:opacity-90 flex items-center gap-2 transition-opacity`}
                               disabled={isSaving}
                             >
-                              {isSaving ? 'Salvando...' : 'Salvar'}
+                              {isSaving ? 'A guardar...' : 'Guardar'}
                             </button>
                           </div>
                         </div>

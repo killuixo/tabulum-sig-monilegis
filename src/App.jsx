@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Search, ExternalLink, RefreshCw, AlertCircle, MessageSquare } from 'lucide-react';
 
 // URL de exportação pública do Google Sheets (formato CSV)
 // O documento precisa estar configurado como "Qualquer pessoa com o link pode visualizar"
@@ -106,10 +105,20 @@ export default function App() {
           </div>
           <div className="grid grid-cols-2 md:grid-cols-1 grid-rows-2">
             <div className={`border-r-[6px] md:border-r-0 md:border-b-[6px] border-black p-4 flex items-center justify-center ${MONDRIAN_COLORS[0]}`}>
-              <RefreshCw 
+              <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
                 className={`w-10 h-10 text-white cursor-pointer hover:rotate-180 transition-transform duration-500 ${loading ? 'animate-spin' : ''}`}
                 onClick={fetchData} 
-              />
+              >
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                <path d="M3 3v5h5"/>
+              </svg>
             </div>
             <div className={`p-4 flex items-center justify-center ${MONDRIAN_COLORS[2]}`}>
                <span className="font-black text-xl text-center">ALESC</span>
@@ -123,7 +132,10 @@ export default function App() {
         <div className="mb-8 relative flex border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white focus-within:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] focus-within:-translate-y-0.5 transition-all">
           <div className={`w-4 border-r-[4px] border-black ${MONDRIAN_COLORS[1]}`}></div>
           <div className="p-4 flex items-center justify-center border-r-[4px] border-black">
-            <Search className="w-6 h-6" />
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+              <circle cx="11" cy="11" r="8"/>
+              <path d="m21 21-4.3-4.3"/>
+            </svg>
           </div>
           <input
             type="text"
@@ -143,7 +155,11 @@ export default function App() {
 
         {error && (
           <div className="p-8 border-[6px] border-black bg-[#c41e3a] text-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] flex items-center gap-4">
-            <AlertCircle className="w-12 h-12 flex-shrink-0" />
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-12 h-12 flex-shrink-0">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 8v4"/>
+              <path d="M12 16h.01"/>
+            </svg>
             <div>
               <h2 className="text-2xl font-black uppercase mb-2">Erro de Conexão</h2>
               <p className="font-bold text-lg">{error}</p>
@@ -181,7 +197,11 @@ export default function App() {
                         className="bg-white p-2 border-2 border-black hover:bg-gray-200 transition-colors"
                         title="Ver na ALESC"
                       >
-                        <ExternalLink className="w-5 h-5 text-black" />
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-black">
+                          <path d="M15 3h6v6"/>
+                          <path d="M10 14 21 3"/>
+                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                        </svg>
                       </a>
                     )}
                   </div>
@@ -221,7 +241,9 @@ export default function App() {
                     <div className="mt-4 pt-4 border-t-[3px] border-black bg-gray-50 -mx-5 px-5 pb-5 -mb-5 flex-grow-0">
                       <div className="flex justify-between items-center mb-2">
                         <p className="text-xs font-black text-gray-800 uppercase flex items-center gap-2">
-                          <MessageSquare className="w-4 h-4" /> Observações
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                          </svg> Observações
                         </p>
                         {editingId !== item['Número da Proposição'] && (
                           <button 

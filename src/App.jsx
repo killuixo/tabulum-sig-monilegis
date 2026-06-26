@@ -19,10 +19,8 @@ export default function App() {
   const [isSaving, setIsSaving] = useState(false);
 
   // A MÁGICA ACONTECE AQUI:
-  // Adaptado para contornar limitações de compilação do ambiente
-  const API_URL = (typeof process !== 'undefined' && process.env && process.env.VITE_GOOGLE_SCRIPT_URL) 
-    ? process.env.VITE_GOOGLE_SCRIPT_URL 
-    : ""; // Se o erro persistir, pode colar a URL gerada pelo Google Apps Script diretamente entre estas aspas
+  // O Vite no Vercel injeta a URL do Google Apps Script usando import.meta.env
+  const API_URL = import.meta.env.VITE_GOOGLE_SCRIPT_URL || "";
 
   const fetchData = async () => {
     setLoading(true);
@@ -32,7 +30,7 @@ export default function App() {
         throw new Error("A variável VITE_GOOGLE_SCRIPT_URL não foi encontrada no Vercel.");
       }
 
-      // Agora buscamos diretamente o JSON da nossa API do Google Apps Script
+      // Busca diretamente o JSON da API do Google Apps Script
       const response = await fetch(API_URL);
       if (!response.ok) throw new Error('Falha ao aceder aos dados da API.');
       
@@ -51,14 +49,14 @@ export default function App() {
     try {
       const response = await fetch(API_URL, {
         method: 'POST',
-        // O text/plain é o truque de ouro para não travar no erro de CORS do Google Scripts
+        // O text/plain evita bloqueios de CORS pelo servidor do Google Scripts
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ numero: numero, observacao: editValue })
       });
       
       const result = await response.json();
       if (result.status === 'success') {
-        // Atualiza a interface local sem precisar recarregar todos os dados da internet
+        // Atualiza a interface local instantaneamente sem precisar recarregar
         setData(prevData => 
           prevData.map(item => 
             item['Número da Proposição'] === numero 

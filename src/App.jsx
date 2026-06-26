@@ -1,19 +1,288 @@
-import { useState } from 'react';
-import logo from './logo.svg';
-import './App.css';
+import React, { useState, useEffect } from 'react';
+import { Search, ExternalLink, RefreshCw, AlertCircle, MessageSquare } from 'lucide-react';
 
-function App() {
-  const [count, setCount] = useState(0);
+// URL de exportação pública do Google Sheets (formato CSV)
+// O documento precisa estar configurado como "Qualquer pessoa com o link pode visualizar"
+const SHEET_ID = '1se2lClYqObX9HV8dTfCR3nKsFZzMbbbIpDKv-WhrAfU';
+const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv`;
+
+// Cores da paleta Mondrian solicitada
+const MONDRIAN_COLORS = [
+  'bg-[#c41e3a]', // Carmesim
+  'bg-[#008080]', // Azul Esverdeado
+  'bg-[#ffdb58]', // Mostarda
+];
+
+export default function App() {
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Novos estados para a edição de observações
+  const [editingId, setEditingId] = useState(null);
+  const [editValue, setEditValue] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  // URL da API do Google Apps Script
+  // Substitua a string abaixo pela URL gerada no seu Google Apps Script (Web App)
+  const API_URL = "COLOQUE_AQUI_A_URL_DO_WEB_APP_GERADA_NO_APPS_SCRIPT";
+
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      // Agora buscamos diretamente o JSON da nossa API do Google Apps Script
+      const response = await fetch(API_URL);
+      if (!response.ok) throw new Error('Falha ao acessar os dados da API.');
+      
+      const jsonData = await response.json();
+      setData(jsonData);
+    } catch (err) {
+      console.error(err);
+      setError('Não foi possível carregar os dados. Verifique a URL do Web App (API_URL).');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveObservacao = async (numero) => {
+    setIsSaving(true);
+    try {
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        // O text/plain é o truque de ouro para não travar no erro de CORS do Google Scripts
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ numero: numero, observacao: editValue })
+      });
+      
+      const result = await response.json();
+      if (result.status === 'success') {
+        // Atualiza a interface local sem precisar recarregar todos os dados da internet
+        setData(prevData => 
+          prevData.map(item => 
+            item['Número da Proposição'] === numero 
+              ? { ...item, 'Observações': editValue } 
+              : item
+          )
+        );
+        setEditingId(null);
+      } else {
+        alert("Erro ao salvar: " + result.message);
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Erro de comunicação ao salvar a observação.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const filteredData = data.filter(item => {
+    const term = searchTerm.toLowerCase();
+    const numero = (item['Número da Proposição'] || '').toLowerCase();
+    const relator = (item['Relator(a) na Comissão'] || '').toLowerCase();
+    const situacao = (item['Situação'] || '').toLowerCase();
+    
+    return numero.includes(term) || relator.includes(term) || situacao.includes(term);
+  });
 
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
+    <div className="min-h-screen bg-[#f8f9fa] text-black font-sans p-4 md:p-8 selection:bg-[#ffdb58] selection:text-black">
+      {/* HEADER ESTILO MONDRIAN */}
+      <div className="max-w-7xl mx-auto mb-10">
+        <div className="border-[6px] border-black bg-white grid grid-cols-1 md:grid-cols-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+          <div className="md:col-span-3 p-6 md:p-10 border-b-[6px] md:border-b-0 md:border-r-[6px] border-black flex flex-col justify-center">
+            <h1 className="text-4xl md:text-6xl font-black uppercase tracking-tighter mb-2">
+              Monitor Legislativo
+            </h1>
+            <p className="text-lg md:text-xl font-bold text-gray-700">
+              Acompanhamento de Proposições da ALESC
+            </p>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-1 grid-rows-2">
+            <div className={`border-r-[6px] md:border-r-0 md:border-b-[6px] border-black p-4 flex items-center justify-center ${MONDRIAN_COLORS[0]}`}>
+              <RefreshCw 
+                className={`w-10 h-10 text-white cursor-pointer hover:rotate-180 transition-transform duration-500 ${loading ? 'animate-spin' : ''}`}
+                onClick={fetchData} 
+              />
+            </div>
+            <div className={`p-4 flex items-center justify-center ${MONDRIAN_COLORS[2]}`}>
+               <span className="font-black text-xl text-center">ALESC</span>
+            </div>
+          </div>
+        </div>
+      </div>
 
-        <h1 class="text-3xl font-bold underline">Hello world!</h1>
-      </header>
+      <div className="max-w-7xl mx-auto">
+        {/* BARRA DE PESQUISA */}
+        <div className="mb-8 relative flex border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white focus-within:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] focus-within:-translate-y-0.5 transition-all">
+          <div className={`w-4 border-r-[4px] border-black ${MONDRIAN_COLORS[1]}`}></div>
+          <div className="p-4 flex items-center justify-center border-r-[4px] border-black">
+            <Search className="w-6 h-6" />
+          </div>
+          <input
+            type="text"
+            placeholder="Buscar por número, relator ou situação..."
+            className="w-full p-4 text-xl font-bold outline-none placeholder-gray-400"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+
+        {/* MENSAGENS DE ESTADO */}
+        {loading && (
+          <div className="text-center p-20 border-[6px] border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+            <h2 className="text-3xl font-black uppercase animate-pulse">Carregando Dados...</h2>
+          </div>
+        )}
+
+        {error && (
+          <div className="p-8 border-[6px] border-black bg-[#c41e3a] text-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] flex items-center gap-4">
+            <AlertCircle className="w-12 h-12 flex-shrink-0" />
+            <div>
+              <h2 className="text-2xl font-black uppercase mb-2">Erro de Conexão</h2>
+              <p className="font-bold text-lg">{error}</p>
+            </div>
+          </div>
+        )}
+
+        {/* GRID DE CARDS */}
+        {!loading && !error && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {filteredData.map((item, index) => {
+              // Alterna as cores para manter a estética
+              const colorClass = MONDRIAN_COLORS[index % MONDRIAN_COLORS.length];
+              
+              return (
+                <div 
+                  key={index} 
+                  className="bg-white border-[5px] border-black flex flex-col shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 hover:shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] transition-all duration-200"
+                >
+                  {/* Cabeçalho do Card */}
+                  <div className={`border-b-[5px] border-black p-4 flex justify-between items-start ${colorClass}`}>
+                    <div>
+                      <span className="bg-black text-white px-2 py-1 text-xs font-black tracking-widest uppercase">
+                        Proposição
+                      </span>
+                      <h3 className="text-3xl font-black mt-2 text-white drop-shadow-md">
+                        {item['Número da Proposição'] || 'S/N'}
+                      </h3>
+                    </div>
+                    {item['Link'] && item['Link'] !== '-' && (
+                      <a 
+                        href={item['Link']} 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="bg-white p-2 border-2 border-black hover:bg-gray-200 transition-colors"
+                        title="Ver na ALESC"
+                      >
+                        <ExternalLink className="w-5 h-5 text-black" />
+                      </a>
+                    )}
+                  </div>
+
+                  {/* Corpo do Card */}
+                  <div className="p-5 flex-grow flex flex-col gap-4">
+                    <div>
+                      <p className="text-xs font-bold text-gray-500 uppercase">Situação</p>
+                      <p className="text-lg font-black leading-tight border-l-[4px] border-black pl-3 mt-1">
+                        {item['Situação'] || '-'}
+                      </p>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-xs font-bold text-gray-500 uppercase">Setor Atual</p>
+                        <p className="font-bold leading-snug">{item['Setor Atual'] || '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-gray-500 uppercase">Data Verificação</p>
+                        <p className="font-bold">{item['Data da Verificação']?.split(' ')[0] || '-'}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-auto pt-4 border-t-[3px] border-black border-dashed flex justify-between items-center">
+                      <div>
+                        <p className="text-xs font-bold text-gray-500 uppercase">Relator(a)</p>
+                        <p className="font-black text-[15px] uppercase">{item['Relator(a) na Comissão'] || '-'}</p>
+                      </div>
+                      <div className="text-right">
+                         <p className="text-xs font-bold text-gray-500 uppercase">Distribuição</p>
+                         <p className="font-bold">{item['Data de Distribuição'] || '-'}</p>
+                      </div>
+                    </div>
+
+                    {/* NOVA SESSÃO: EDIÇÃO DE OBSERVAÇÕES */}
+                    <div className="mt-4 pt-4 border-t-[3px] border-black bg-gray-50 -mx-5 px-5 pb-5 -mb-5 flex-grow-0">
+                      <div className="flex justify-between items-center mb-2">
+                        <p className="text-xs font-black text-gray-800 uppercase flex items-center gap-2">
+                          <MessageSquare className="w-4 h-4" /> Observações
+                        </p>
+                        {editingId !== item['Número da Proposição'] && (
+                          <button 
+                            onClick={() => {
+                              setEditingId(item['Número da Proposição']);
+                              setEditValue(item['Observações'] || '');
+                            }}
+                            className="text-xs font-bold uppercase underline hover:text-[#008080] transition-colors"
+                          >
+                            Editar
+                          </button>
+                        )}
+                      </div>
+                      
+                      {editingId === item['Número da Proposição'] ? (
+                        <div className="flex flex-col gap-2">
+                          <textarea 
+                            className="w-full border-2 border-black p-2 text-sm font-bold resize-none outline-none focus:border-[#008080]"
+                            rows="3"
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            placeholder="Escreva uma anotação aqui..."
+                          />
+                          <div className="flex gap-2 justify-end">
+                            <button 
+                              onClick={() => setEditingId(null)}
+                              className="px-3 py-1 bg-white border-2 border-black text-xs font-bold uppercase hover:bg-gray-200 transition-colors"
+                              disabled={isSaving}
+                            >
+                              Cancelar
+                            </button>
+                            <button 
+                              onClick={() => handleSaveObservacao(item['Número da Proposição'])}
+                              className={`px-3 py-1 border-2 border-black text-xs font-black uppercase text-white ${MONDRIAN_COLORS[1]} hover:opacity-90 flex items-center gap-2 transition-opacity`}
+                              disabled={isSaving}
+                            >
+                              {isSaving ? 'Salvando...' : 'Salvar'}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-sm font-bold text-gray-700 min-h-[2rem]">
+                          {item['Observações'] || <span className="text-gray-400 italic font-normal">Nenhuma observação inserida.</span>}
+                        </p>
+                      )}
+                    </div>
+
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        
+        {!loading && !error && filteredData.length === 0 && (
+          <div className="text-center p-12 border-[5px] border-black bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+            <h3 className="text-2xl font-black uppercase">Nenhuma proposição encontrada.</h3>
+            <p className="font-bold text-gray-600 mt-2">Tente alterar os termos da sua pesquisa.</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
-
-export default App;

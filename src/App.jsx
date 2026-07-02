@@ -18,6 +18,16 @@ export default function App() {
   const [editValue, setEditValue] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
+  // NOVA FUNÇÃO: Formata a data removendo a hora e invertendo para DD/MM/AAAA
+  const formatarData = (dataString) => {
+    if (!dataString || dataString === '-') return '-';
+    const apenasData = dataString.split(/[T ]/)[0];
+    if (apenasData.includes('-')) {
+      return apenasData.split('-').reverse().join('/');
+    }
+    return apenasData;
+  };
+
   // A MÁGICA ACONTECE AQUI:
   // O Vite no Vercel injeta a URL do Google Apps Script usando import.meta.env
   const API_URL = import.meta.env.VITE_GOOGLE_SCRIPT_URL || "";
@@ -221,7 +231,7 @@ export default function App() {
                       </div>
                       <div>
                         <p className="text-xs font-bold text-gray-500 uppercase">Data Verificação</p>
-                        <p className="font-bold">{item['Data da Verificação']?.split(' ')[0] || '-'}</p>
+                        <p className="font-bold">{formatarData(item['Data da Verificação'])}</p>
                       </div>
                     </div>
 
@@ -232,7 +242,7 @@ export default function App() {
                       </div>
                       <div className="text-right">
                          <p className="text-xs font-bold text-gray-500 uppercase">Distribuição</p>
-                         <p className="font-bold">{item['Data de Distribuição'] || '-'}</p>
+                         <p className="font-bold">{formatarData(item['Data de Distribuição'])}</p>
                       </div>
                     </div>
 

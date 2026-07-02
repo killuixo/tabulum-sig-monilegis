@@ -13,12 +13,12 @@ export default function App() {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Novos estados para a edição de observações
+  // Estados para a edição de observações
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  // NOVA FUNÇÃO: Formata a data removendo a hora e invertendo para DD/MM/AAAA
+  // Formata a data removendo a hora e invertendo para DD/MM/AAAA
   const formatarData = (dataString) => {
     if (!dataString || dataString === '-') return '-';
     const apenasData = dataString.split(/[T ]/)[0];
@@ -28,8 +28,16 @@ export default function App() {
     return apenasData;
   };
 
-  // A MÁGICA ACONTECE AQUI:
-  // O Vite no Vercel injeta a URL do Google Apps Script usando import.meta.env
+  // Funções flexíveis para ler os dados das colunas ignorando problemas de digitação/acentos
+  const getNumero = (item) => item['Número da Proposição'] || item['Numero da Proposicao'] || item['numero'] || '';
+  const getEmenta = (item) => item['Ementa'] || item['ementa'] || item['EMENTA'] || item['Resumo'] || '';
+  const getUltimoMovimento = (item) => item['Último Movimento'] || item['Ultimo Movimento'] || item['Ultimo movimento'] || item['ultimo movimento'] || '';
+  const getRelator = (item) => item['Relator(a) na Comissão'] || item['Relator'] || item['relator'] || '';
+  const getSituacao = (item) => item['Situação'] || item['Situacao'] || item['situacao'] || '';
+  const getSetor = (item) => item['Setor Atual'] || item['Setor atual'] || item['setor'] || '';
+  const getObservacoes = (item) => item['Observações'] || item['Observacoes'] || item['observacoes'] || '';
+  const getLink = (item) => item['Link'] || item['link'] || '';
+
   const API_URL = import.meta.env.VITE_GOOGLE_SCRIPT_URL || "";
 
   const fetchData = async () => {
@@ -40,7 +48,6 @@ export default function App() {
         throw new Error("A variável VITE_GOOGLE_SCRIPT_URL não foi encontrada no Vercel.");
       }
 
-      // Busca diretamente o JSON da API do Google Apps Script
       const response = await fetch(API_URL);
       if (!response.ok) throw new Error('Falha ao aceder aos dados da API.');
       
@@ -59,18 +66,16 @@ export default function App() {
     try {
       const response = await fetch(API_URL, {
         method: 'POST',
-        // O text/plain evita bloqueios de CORS pelo servidor do Google Scripts
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ numero: numero, observacao: editValue })
       });
       
       const result = await response.json();
       if (result.status === 'success') {
-        // Atualiza a interface local instantaneamente sem precisar recarregar
         setData(prevData => 
           prevData.map(item => 
-            item['Número da Proposição'] === numero 
-              ? { ...item, 'Observações': editValue } 
+            getNumero(item) === numero 
+              ? { ...item, 'Observações': editValue } // Atualiza na chave padrão
               : item
           )
         );
@@ -92,11 +97,12 @@ export default function App() {
 
   const filteredData = data.filter(item => {
     const term = searchTerm.toLowerCase();
-    const numero = (item['Número da Proposição'] || '').toLowerCase();
-    const relator = (item['Relator(a) na Comissão'] || '').toLowerCase();
-    const situacao = (item['Situação'] || '').toLowerCase();
+    const numero = getNumero(item).toLowerCase();
+    const relator = getRelator(item).toLowerCase();
+    const situacao = getSituacao(item).toLowerCase();
+    const ementa = getEmenta(item).toLowerCase();
     
-    return numero.includes(term) || relator.includes(term) || situacao.includes(term);
+    return numero.includes(term) || relator.includes(term) || situacao.includes(term) || ementa.includes(term);
   });
 
   return (
@@ -148,14 +154,13 @@ export default function App() {
           </div>
           <input
             type="text"
-            placeholder="Buscar por número, relator ou situação..."
+            placeholder="Buscar por número, ementa, relator ou situação..."
             className="w-full p-4 text-xl font-bold outline-none placeholder-gray-400"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
 
-        {/* MENSAGENS DE ESTADO */}
         {loading && (
           <div className="text-center p-20 border-[6px] border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
             <h2 className="text-3xl font-black uppercase animate-pulse">A Carregar Dados...</h2>
@@ -176,12 +181,15 @@ export default function App() {
           </div>
         )}
 
-        {/* GRID DE CARDS */}
         {!loading && !error && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredData.map((item, index) => {
-              // Alterna as cores para manter a estética
               const colorClass = MONDRIAN_COLORS[index % MONDRIAN_COLORS.length];
+              const numeroProp = getNumero(item) || 'S/N';
+              const ementaProp = getEmenta(item);
+              const ultimoMovimentoProp = getUltimoMovimento(item);
+              const obsProp = getObservacoes(item);
+              const linkProp = getLink(item);
               
               return (
                 <div 
@@ -195,12 +203,12 @@ export default function App() {
                         Proposição
                       </span>
                       <h3 className="text-3xl font-black mt-2 text-white drop-shadow-md">
-                        {item['Número da Proposição'] || 'S/N'}
+                        {numeroProp}
                       </h3>
                     </div>
-                    {item['Link'] && item['Link'] !== '-' && (
+                    {linkProp && linkProp !== '-' && (
                       <a 
-                        href={item['Link']} 
+                        href={linkProp} 
                         target="_blank" 
                         rel="noreferrer"
                         className="bg-white p-2 border-2 border-black hover:bg-gray-200 transition-colors"
@@ -217,17 +225,26 @@ export default function App() {
 
                   {/* Corpo do Card */}
                   <div className="p-5 flex-grow flex flex-col gap-4">
+                    
+                    {/* Ementa do Projeto (Resumo) */}
+                    <div className="bg-gray-50 border-[2px] border-black p-3 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
+                      <p className="text-[10px] font-black text-gray-800 uppercase tracking-wider mb-1">Ementa / Resumo</p>
+                      <p className="text-sm font-bold text-gray-800 leading-snug">
+                        {ementaProp || <span className="text-gray-400 italic font-normal">Ementa não informada.</span>}
+                      </p>
+                    </div>
+
                     <div>
-                      <p className="text-xs font-bold text-gray-500 uppercase">Situação</p>
+                      <p className="text-xs font-bold text-gray-500 uppercase">Situação Geral</p>
                       <p className="text-lg font-black leading-tight border-l-[4px] border-black pl-3 mt-1">
-                        {item['Situação'] || '-'}
+                        {getSituacao(item) || '-'}
                       </p>
                     </div>
                     
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <p className="text-xs font-bold text-gray-500 uppercase">Setor Atual</p>
-                        <p className="font-bold leading-snug">{item['Setor Atual'] || '-'}</p>
+                        <p className="font-bold leading-snug">{getSetor(item) || '-'}</p>
                       </div>
                       <div>
                         <p className="text-xs font-bold text-gray-500 uppercase">Data Verificação</p>
@@ -235,10 +252,10 @@ export default function App() {
                       </div>
                     </div>
 
-                    <div className="mt-auto pt-4 border-t-[3px] border-black border-dashed flex justify-between items-center">
+                    <div className="pt-4 border-t-[3px] border-black border-dashed flex justify-between items-center">
                       <div>
                         <p className="text-xs font-bold text-gray-500 uppercase">Relator(a)</p>
-                        <p className="font-black text-[15px] uppercase">{item['Relator(a) na Comissão'] || '-'}</p>
+                        <p className="font-black text-[15px] uppercase">{getRelator(item) || '-'}</p>
                       </div>
                       <div className="text-right">
                          <p className="text-xs font-bold text-gray-500 uppercase">Distribuição</p>
@@ -246,19 +263,32 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* NOVA SESSÃO: EDIÇÃO DE OBSERVAÇÕES */}
-                    <div className="mt-4 pt-4 border-t-[3px] border-black bg-gray-50 -mx-5 px-5 pb-5 -mb-5 flex-grow-0">
+                    {/* Último Movimento / Status de Vistas */}
+                    <div className={`mt-2 border-[3px] border-black p-3 ${ultimoMovimentoProp ? 'bg-[#ffdb58]/30' : 'bg-white'}`}>
+                      <p className="text-[10px] font-black text-black uppercase tracking-wider flex items-center gap-1 mb-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3">
+                          <circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>
+                        </svg>
+                        Último Movimento / Vistas
+                      </p>
+                      <p className="text-sm font-bold text-black leading-snug">
+                         {ultimoMovimentoProp || '-'}
+                      </p>
+                    </div>
+
+                    {/* SESSÃO: EDIÇÃO DE OBSERVAÇÕES */}
+                    <div className="mt-auto pt-4 border-t-[3px] border-black bg-gray-50 -mx-5 px-5 pb-5 -mb-5 flex-grow-0">
                       <div className="flex justify-between items-center mb-2">
                         <p className="text-xs font-black text-gray-800 uppercase flex items-center gap-2">
                           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
                             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                          </svg> Observações
+                          </svg> Notas Internas
                         </p>
-                        {editingId !== item['Número da Proposição'] && (
+                        {editingId !== numeroProp && (
                           <button 
                             onClick={() => {
-                              setEditingId(item['Número da Proposição']);
-                              setEditValue(item['Observações'] || '');
+                              setEditingId(numeroProp);
+                              setEditValue(obsProp || '');
                             }}
                             className="text-xs font-bold uppercase underline hover:text-[#008080] transition-colors"
                           >
@@ -267,7 +297,7 @@ export default function App() {
                         )}
                       </div>
                       
-                      {editingId === item['Número da Proposição'] ? (
+                      {editingId === numeroProp ? (
                         <div className="flex flex-col gap-2">
                           <textarea 
                             className="w-full border-2 border-black p-2 text-sm font-bold resize-none outline-none focus:border-[#008080]"
@@ -285,7 +315,7 @@ export default function App() {
                               Cancelar
                             </button>
                             <button 
-                              onClick={() => handleSaveObservacao(item['Número da Proposição'])}
+                              onClick={() => handleSaveObservacao(numeroProp)}
                               className={`px-3 py-1 border-2 border-black text-xs font-black uppercase text-white ${MONDRIAN_COLORS[1]} hover:opacity-90 flex items-center gap-2 transition-opacity`}
                               disabled={isSaving}
                             >
@@ -295,7 +325,7 @@ export default function App() {
                         </div>
                       ) : (
                         <p className="text-sm font-bold text-gray-700 min-h-[2rem]">
-                          {item['Observações'] || <span className="text-gray-400 italic font-normal">Nenhuma observação inserida.</span>}
+                          {obsProp || <span className="text-gray-400 italic font-normal">Nenhuma observação inserida.</span>}
                         </p>
                       )}
                     </div>

@@ -13,12 +13,13 @@ export default function App() {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Estados para a edição de observações e visualização
+  // Estados para a edição de observações, visualização e abas
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [toastMsg, setToastMsg] = useState(''); // Substitui o alert()
   const [viewMode, setViewMode] = useState('card'); // 'card' ou 'list'
+  const [activeTab, setActiveTab] = useState('processo'); // 'processo' ou 'atividade'
 
   // Formata a data removendo a hora e invertendo para DD/MM/AAAA
   const formatarData = (dataString) => {
@@ -30,7 +31,7 @@ export default function App() {
     return apenasData;
   };
 
-  // Funções flexíveis para ler os dados das colunas ignorando problemas de digitação/acentos
+  // Funções flexíveis para ler os dados das colunas
   const getNumero = (item) => item['Número da Proposição'] || item['Numero da Proposicao'] || item['numero'] || '';
   const getEmenta = (item) => item['Ementa'] || item['ementa'] || item['EMENTA'] || item['Resumo'] || '';
   const getUltimoMovimento = (item) => item['Último Movimento'] || item['Ultimo Movimento'] || item['Ultimo movimento'] || item['ultimo movimento'] || '';
@@ -40,15 +41,15 @@ export default function App() {
   const getObservacoes = (item) => item['Observações'] || item['Observacoes'] || item['observacoes'] || '';
   const getLink = (item) => item['Link'] || item['link'] || '';
 
-  // Mantido exatamente como no seu código original
-  const API_URL = import.meta.env.VITE_GOOGLE_SCRIPT_URL || "";
+  // Dependência ORIGINAL mantida com verificação de segurança para evitar falhas no ambiente de visualização
+  const API_URL = (import.meta && import.meta.env && import.meta.env.VITE_GOOGLE_SCRIPT_URL) || "";
 
   const fetchData = async () => {
     setLoading(true);
     setError(null);
     try {
       if (!API_URL) {
-        throw new Error("A variável VITE_GOOGLE_SCRIPT_URL não foi encontrada no Vercel.");
+        throw new Error("A variável VITE_GOOGLE_SCRIPT_URL não foi encontrada.");
       }
 
       const response = await fetch(API_URL);
@@ -83,11 +84,12 @@ export default function App() {
         setData(prevData => 
           prevData.map(item => 
             getNumero(item) === numero 
-              ? { ...item, 'Observações': editValue } // Atualiza na chave padrão
+              ? { ...item, 'Observações': editValue } 
               : item
           )
         );
         setEditingId(null);
+        showToast("Observação guardada com sucesso!");
       } else {
         showToast("Erro ao guardar: " + result.message);
       }
@@ -103,27 +105,49 @@ export default function App() {
     fetchData();
   }, []);
 
+  // FILTRAGEM INTELIGENTE (Abas + Pesquisa)
   const filteredData = data.filter(item => {
-    const term = searchTerm.toLowerCase();
-    const numero = getNumero(item).toLowerCase();
-    const relator = getRelator(item).toLowerCase();
-    const situacao = getSituacao(item).toLowerCase();
-    const ementa = getEmenta(item).toLowerCase();
+    const num = getNumero(item).toUpperCase();
+    if (!num) return false;
+
+    // Extrai o prefixo (Ex: "PL./0123" -> "PL")
+    const prefix = num.split('/')[0].replace('.', ''); 
     
-    return numero.includes(term) || relator.includes(term) || situacao.includes(term) || ementa.includes(term);
+    // Prefixos clássicos de Processo Legislativo da ALESC
+    const processoPrefixes = ['PL', 'PEC', 'PLC', 'PDL', 'PRC', 'MPV', 'VET', 'MSG'];
+    
+    // Filtro por Aba
+    const isProcesso = processoPrefixes.includes(prefix);
+    if (activeTab === 'processo' && !isProcesso) return false;
+    if (activeTab === 'atividade' && isProcesso) return false;
+
+    // Filtro por Texto Pesquisado
+    const term = searchTerm.toLowerCase();
+    if (term) {
+      const relator = getRelator(item).toLowerCase();
+      const situacao = getSituacao(item).toLowerCase();
+      const ementa = getEmenta(item).toLowerCase();
+      
+      return num.toLowerCase().includes(term) || 
+             relator.includes(term) || 
+             situacao.includes(term) || 
+             ementa.includes(term);
+    }
+    
+    return true;
   });
 
   return (
     <div className="min-h-screen bg-[#f8f9fa] text-black font-sans p-4 md:p-8 selection:bg-[#ffdb58] selection:text-black">
       {/* HEADER ESTILO MONDRIAN */}
-      <div className="max-w-7xl mx-auto mb-10">
+      <div className="max-w-7xl mx-auto mb-8">
         <div className="border-[6px] border-black bg-white grid grid-cols-1 md:grid-cols-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
           <div className="md:col-span-3 p-6 md:p-10 border-b-[6px] md:border-b-0 md:border-r-[6px] border-black flex flex-col justify-center">
             <h1 className="text-4xl md:text-6xl font-black uppercase tracking-tighter mb-2">
-              Monitor Legislativo
+              TABULUM
             </h1>
             <p className="text-lg md:text-xl font-bold text-gray-700">
-              Acompanhamento de Proposições da ALESC
+              Monitor Legislativo do Mandato
             </p>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-1 grid-rows-2">
@@ -152,10 +176,28 @@ export default function App() {
 
       <div className="max-w-7xl mx-auto">
         
+        {/* NAVEGAÇÃO DE ABAS */}
+        <div className="flex flex-col md:flex-row mb-6 border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white overflow-hidden">
+          <button 
+             onClick={() => setActiveTab('processo')}
+             className={`flex-1 p-4 font-black uppercase text-lg md:border-r-[4px] border-black transition-colors flex items-center justify-center gap-3 ${activeTab === 'processo' ? MONDRIAN_COLORS[0] + ' text-white' : 'hover:bg-gray-100 text-gray-400'}`}
+          >
+             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+             Processo Legislativo
+          </button>
+          <button 
+             onClick={() => setActiveTab('atividade')}
+             className={`flex-1 p-4 font-black uppercase text-lg transition-colors flex items-center justify-center gap-3 ${activeTab === 'atividade' ? MONDRIAN_COLORS[1] + ' text-white' : 'hover:bg-gray-100 text-gray-400'}`}
+          >
+             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+             Atividade Parlamentar
+          </button>
+        </div>
+
         <div className="flex flex-col md:flex-row gap-4 mb-8">
           {/* BARRA DE PESQUISA */}
           <div className="flex-1 relative flex border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white focus-within:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] focus-within:-translate-y-0.5 transition-all">
-            <div className={`w-4 border-r-[4px] border-black ${MONDRIAN_COLORS[1]}`}></div>
+            <div className={`w-4 border-r-[4px] border-black ${activeTab === 'processo' ? MONDRIAN_COLORS[0] : MONDRIAN_COLORS[1]}`}></div>
             <div className="p-4 flex items-center justify-center border-r-[4px] border-black">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
                 <circle cx="11" cy="11" r="8"/>
@@ -171,7 +213,7 @@ export default function App() {
             />
           </div>
 
-          {/* NOVO: TOGGLE VISUALIZAÇÃO */}
+          {/* TOGGLE VISUALIZAÇÃO */}
           <div className="flex border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white self-stretch">
             <button
               onClick={() => setViewMode('card')}
@@ -183,7 +225,7 @@ export default function App() {
             <div className="w-[4px] bg-black"></div>
             <button
               onClick={() => setViewMode('list')}
-              className={`flex-1 md:flex-none px-6 py-4 font-black uppercase flex items-center justify-center gap-2 transition-colors ${viewMode === 'list' ? 'bg-[#008080] text-white' : 'hover:bg-gray-100'}`}
+              className={`flex-1 md:flex-none px-6 py-4 font-black uppercase flex items-center justify-center gap-2 transition-colors ${viewMode === 'list' ? 'bg-black text-white' : 'hover:bg-gray-100'}`}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
               Lista
@@ -211,6 +253,7 @@ export default function App() {
           </div>
         )}
 
+        {/* MODO CARDS */}
         {!loading && !error && viewMode === 'card' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredData.map((item, index) => {
@@ -226,11 +269,10 @@ export default function App() {
                   key={index} 
                   className="bg-white border-[5px] border-black flex flex-col shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 hover:shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] transition-all duration-200"
                 >
-                  {/* Cabeçalho do Card */}
                   <div className={`border-b-[5px] border-black p-4 flex justify-between items-start ${colorClass}`}>
                     <div>
                       <span className="bg-black text-white px-2 py-1 text-xs font-black tracking-widest uppercase">
-                        Proposição
+                        {activeTab === 'processo' ? 'Processo' : 'Atividade'}
                       </span>
                       <h3 className="text-3xl font-black mt-2 text-white drop-shadow-md">
                         {numeroProp}
@@ -253,10 +295,7 @@ export default function App() {
                     )}
                   </div>
 
-                  {/* Corpo do Card */}
                   <div className="p-5 flex-grow flex flex-col gap-4">
-                    
-                    {/* Ementa do Projeto (Resumo) */}
                     <div className="bg-gray-50 border-[2px] border-black p-3 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
                       <p className="text-[10px] font-black text-gray-800 uppercase tracking-wider mb-1">Ementa / Resumo</p>
                       <p className="text-sm font-bold text-gray-800 leading-snug">
@@ -293,7 +332,6 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Último Movimento / Status de Vistas */}
                     <div className={`mt-2 border-[3px] border-black p-3 ${ultimoMovimentoProp ? 'bg-[#ffdb58]/30' : 'bg-white'}`}>
                       <p className="text-[10px] font-black text-black uppercase tracking-wider flex items-center gap-1 mb-1">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3">
@@ -306,7 +344,6 @@ export default function App() {
                       </p>
                     </div>
 
-                    {/* SESSÃO: EDIÇÃO DE OBSERVAÇÕES */}
                     <div className="mt-auto pt-4 border-t-[3px] border-black bg-gray-50 -mx-5 px-5 pb-5 -mb-5 flex-grow-0">
                       <div className="flex justify-between items-center mb-2">
                         <p className="text-xs font-black text-gray-800 uppercase flex items-center gap-2">
@@ -366,6 +403,7 @@ export default function App() {
           </div>
         )}
 
+        {/* MODO LISTA */}
         {!loading && !error && viewMode === 'list' && (
           <div className="flex flex-col gap-4">
             {filteredData.map((item, index) => {
@@ -381,19 +419,17 @@ export default function App() {
                   <div className={`w-full md:w-4 min-h-[1rem] md:min-h-full border-b-[4px] md:border-b-0 md:border-r-[4px] border-black flex-shrink-0 ${colorClass}`}></div>
                   
                   <div className="p-4 flex-grow flex flex-col md:flex-row gap-6 items-start md:items-center">
-                    {/* Número e Link (Lista) */}
                     <div className="flex flex-row md:flex-col gap-2 items-center md:items-start md:w-32 flex-shrink-0">
                       <span className="bg-black text-white px-2 py-1 text-sm font-black tracking-widest uppercase">
                         {numeroProp}
                       </span>
                       {linkProp && linkProp !== '-' && (
-                        <a href={linkProp} target="_blank" rel="noreferrer" className="text-xs font-black uppercase underline hover:text-[#008080]">
+                        <a href={linkProp} target="_blank" rel="noreferrer" className="text-xs font-black uppercase underline hover:text-black text-gray-600">
                           Ver na ALESC
                         </a>
                       )}
                     </div>
 
-                    {/* Dados Principais (Lista) */}
                     <div className="flex-grow grid grid-cols-1 md:grid-cols-12 gap-4 w-full">
                       <div className="md:col-span-5">
                         <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Ementa</p>
@@ -410,7 +446,6 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Observações / Ação (Lista) */}
                     <div className="w-full md:w-64 flex-shrink-0 border-t-[3px] md:border-t-0 md:border-l-[3px] border-black border-dashed pt-3 md:pt-0 md:pl-4">
                       <div className="flex justify-between items-center mb-2">
                         <p className="text-xs font-black text-gray-800 uppercase flex items-center gap-1">Notas</p>
@@ -468,13 +503,13 @@ export default function App() {
         
         {!loading && !error && filteredData.length === 0 && (
           <div className="text-center p-12 border-[5px] border-black bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
-            <h3 className="text-2xl font-black uppercase">Nenhuma proposição encontrada.</h3>
-            <p className="font-bold text-gray-600 mt-2">Tente alterar os termos da sua pesquisa.</p>
+            <h3 className="text-2xl font-black uppercase">Nenhum resultado nesta aba.</h3>
+            <p className="font-bold text-gray-600 mt-2">Experimente mudar de aba ou alterar os termos da sua pesquisa.</p>
           </div>
         )}
       </div>
 
-      {/* TOAST DE AVISOS (Substitui o alert padrão) */}
+      {/* TOAST DE AVISOS */}
       {toastMsg && (
         <div className="fixed bottom-6 right-6 p-4 border-[4px] border-black bg-[#ffdb58] text-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] z-50 flex items-center gap-3 animate-bounce">
            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>

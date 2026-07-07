@@ -147,7 +147,7 @@ export default function App() {
               TABULUM
             </h1>
             <p className="text-lg md:text-xl font-bold text-gray-700">
-              Monitor Legislativo do Mandato
+              Monitor Legislativo
             </p>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-1 grid-rows-2">

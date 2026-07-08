@@ -17,7 +17,7 @@ export default function App() {
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const [toastMsg, setToastMsg] = useState(''); // Substitui o alert()
+  const [toastMsg, setToastMsg] = useState(''); 
   const [viewMode, setViewMode] = useState('card'); // 'card' ou 'list'
   const [activeTab, setActiveTab] = useState('processo'); // 'processo' ou 'atividade'
 
@@ -41,7 +41,7 @@ export default function App() {
   const getObservacoes = (item) => item['Observações'] || item['Observacoes'] || item['observacoes'] || '';
   const getLink = (item) => item['Link'] || item['link'] || '';
 
-  // Dependência ORIGINAL mantida com verificação de segurança para evitar falhas no ambiente de visualização
+  // Chamada de ambiente segura para funcionar tanto localmente, no Vercel, e no Canvas.
   const API_URL = (import.meta && import.meta.env && import.meta.env.VITE_GOOGLE_SCRIPT_URL) || "";
 
   const fetchData = async () => {
@@ -147,7 +147,7 @@ export default function App() {
               TABULUM
             </h1>
             <p className="text-lg md:text-xl font-bold text-gray-700">
-              Monitor Legislativo
+              Monitor Legislativo do Mandato
             </p>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-1 grid-rows-2">
@@ -233,6 +233,7 @@ export default function App() {
           </div>
         </div>
 
+        {/* FEEDBACK DE ESTADO */}
         {loading && (
           <div className="text-center p-20 border-[6px] border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
             <h2 className="text-3xl font-black uppercase animate-pulse">A Carregar Dados...</h2>
@@ -253,7 +254,7 @@ export default function App() {
           </div>
         )}
 
-        {/* MODO CARDS */}
+        {}
         {!loading && !error && viewMode === 'card' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredData.map((item, index) => {
@@ -264,11 +265,34 @@ export default function App() {
               const obsProp = getObservacoes(item);
               const linkProp = getLink(item);
               
+              const movLower = (ultimoMovimentoProp || '').toLowerCase();
+              const sitLower = (getSituacao(item) || '').toLowerCase();
+
+              // Lógica de Cores da Caixa de Último Movimento
+              let boxColorClass = 'bg-white text-black';
+              let titleColorClass = 'text-black';
+              let boxTitle = 'Último Movimento';
+
+              if (movLower.includes('vista')) {
+                boxColorClass = 'bg-[#c41e3a] text-white';
+                titleColorClass = 'text-white';
+                boxTitle = 'Pedido de Vista';
+              } else if (movLower.includes('concluíd') || movLower.includes('aprovad') || sitLower.includes('concluíd') || sitLower.includes('aprovad') || sitLower.includes('arquivad')) {
+                boxColorClass = 'bg-[#008080] text-white';
+                titleColorClass = 'text-white';
+              } else if (movLower.includes('aguardando') || movLower.includes('comissão') || sitLower.includes('aguardando') || sitLower.includes('comissão')) {
+                boxColorClass = 'bg-[#ffdb58] text-black';
+                titleColorClass = 'text-black';
+              } else if (ultimoMovimentoProp) {
+                boxColorClass = 'bg-[#ffdb58]/30 text-black';
+              }
+
               return (
                 <div 
                   key={index} 
                   className="bg-white border-[5px] border-black flex flex-col shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 hover:shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] transition-all duration-200"
                 >
+                  {/* Cabeçalho do Card */}
                   <div className={`border-b-[5px] border-black p-4 flex justify-between items-start ${colorClass}`}>
                     <div>
                       <span className="bg-black text-white px-2 py-1 text-xs font-black tracking-widest uppercase">
@@ -296,6 +320,21 @@ export default function App() {
                   </div>
 
                   <div className="p-5 flex-grow flex flex-col gap-4">
+                    
+                    {/* CAIXA DE ÚLTIMO MOVIMENTO (Posicionada ACIMA da ementa e colorida dinamicamente) */}
+                    <div className={`border-[3px] border-black p-3 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] ${boxColorClass}`}>
+                      <p className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1 mb-1 ${titleColorClass}`}>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3">
+                          <circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>
+                        </svg>
+                        {boxTitle}
+                      </p>
+                      <p className={`text-sm font-bold leading-snug ${titleColorClass}`}>
+                         {ultimoMovimentoProp || '-'}
+                      </p>
+                    </div>
+
+                    {/* Ementa do Projeto (Resumo) */}
                     <div className="bg-gray-50 border-[2px] border-black p-3 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
                       <p className="text-[10px] font-black text-gray-800 uppercase tracking-wider mb-1">Ementa / Resumo</p>
                       <p className="text-sm font-bold text-gray-800 leading-snug">
@@ -332,18 +371,7 @@ export default function App() {
                       </div>
                     </div>
 
-                    <div className={`mt-2 border-[3px] border-black p-3 ${ultimoMovimentoProp ? 'bg-[#ffdb58]/30' : 'bg-white'}`}>
-                      <p className="text-[10px] font-black text-black uppercase tracking-wider flex items-center gap-1 mb-1">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3">
-                          <circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>
-                        </svg>
-                        Último Movimento / Vistas
-                      </p>
-                      <p className="text-sm font-bold text-black leading-snug">
-                         {ultimoMovimentoProp || '-'}
-                      </p>
-                    </div>
-
+                    {/* SESSÃO: EDIÇÃO DE OBSERVAÇÕES */}
                     <div className="mt-auto pt-4 border-t-[3px] border-black bg-gray-50 -mx-5 px-5 pb-5 -mb-5 flex-grow-0">
                       <div className="flex justify-between items-center mb-2">
                         <p className="text-xs font-black text-gray-800 uppercase flex items-center gap-2">
@@ -403,7 +431,7 @@ export default function App() {
           </div>
         )}
 
-        {/* MODO LISTA */}
+        {}
         {!loading && !error && viewMode === 'list' && (
           <div className="flex flex-col gap-4">
             {filteredData.map((item, index) => {
@@ -413,6 +441,27 @@ export default function App() {
               const ultimoMovimentoProp = getUltimoMovimento(item);
               const obsProp = getObservacoes(item);
               const linkProp = getLink(item);
+
+              const movLower = (ultimoMovimentoProp || '').toLowerCase();
+              const sitLower = (getSituacao(item) || '').toLowerCase();
+
+              let boxColorClass = 'bg-white text-black';
+              let titleColorClass = 'text-black';
+              let boxTitle = 'Último Movimento';
+
+              if (movLower.includes('vista')) {
+                boxColorClass = 'bg-[#c41e3a] text-white';
+                titleColorClass = 'text-white';
+                boxTitle = 'Pedido de Vista';
+              } else if (movLower.includes('concluíd') || movLower.includes('aprovad') || sitLower.includes('concluíd') || sitLower.includes('aprovad') || sitLower.includes('arquivad')) {
+                boxColorClass = 'bg-[#008080] text-white';
+                titleColorClass = 'text-white';
+              } else if (movLower.includes('aguardando') || movLower.includes('comissão') || sitLower.includes('aguardando') || sitLower.includes('comissão')) {
+                boxColorClass = 'bg-[#ffdb58] text-black';
+                titleColorClass = 'text-black';
+              } else if (ultimoMovimentoProp) {
+                boxColorClass = 'bg-[#ffdb58]/30 text-black';
+              }
 
               return (
                 <div key={index} className="bg-white border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col md:flex-row hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 overflow-hidden">
@@ -431,18 +480,21 @@ export default function App() {
                     </div>
 
                     <div className="flex-grow grid grid-cols-1 md:grid-cols-12 gap-4 w-full">
+                      {/* Na lista, a caixa colorida toma destaque na primeira coluna */}
                       <div className="md:col-span-5">
+                        <div className={`p-2 border-[2px] border-black ${boxColorClass} h-full flex flex-col justify-center`}>
+                          <p className={`text-[10px] font-black uppercase tracking-wider mb-1 ${titleColorClass}`}>{boxTitle}</p>
+                          <p className={`text-sm font-bold line-clamp-3 ${titleColorClass}`} title={ultimoMovimentoProp}>{ultimoMovimentoProp || '-'}</p>
+                        </div>
+                      </div>
+                      <div className="md:col-span-4 flex flex-col justify-center">
                         <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Ementa</p>
                         <p className="text-sm font-bold text-gray-800 line-clamp-3" title={ementaProp}>{ementaProp || '-'}</p>
                       </div>
-                      <div className="md:col-span-3">
+                      <div className="md:col-span-3 flex flex-col justify-center">
                         <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Situação / Setor</p>
                         <p className="text-sm font-bold">{getSituacao(item) || '-'}</p>
                         <p className="text-xs text-gray-600 font-bold truncate">{getSetor(item) || '-'}</p>
-                      </div>
-                      <div className="md:col-span-4">
-                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Último Movimento</p>
-                        <p className="text-sm font-bold line-clamp-3">{ultimoMovimentoProp || '-'}</p>
                       </div>
                     </div>
 
@@ -509,6 +561,7 @@ export default function App() {
         )}
       </div>
 
+      {}
       {/* TOAST DE AVISOS */}
       {toastMsg && (
         <div className="fixed bottom-6 right-6 p-4 border-[4px] border-black bg-[#ffdb58] text-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] z-50 flex items-center gap-3 animate-bounce">

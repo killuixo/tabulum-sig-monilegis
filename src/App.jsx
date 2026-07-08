@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 
-// Cores da paleta Mondrian solicitada
 const MONDRIAN_COLORS = [
   'bg-[#c41e3a]', // Carmesim
   'bg-[#008080]', // Azul Esverdeado
@@ -13,15 +12,13 @@ export default function App() {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Estados para a edição de observações, visualização e abas
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const [toastMsg, setToastMsg] = useState(''); 
-  const [viewMode, setViewMode] = useState('card'); // 'card' ou 'list'
-  const [activeTab, setActiveTab] = useState('processo'); // 'processo' ou 'atividade'
+  const [toastMsg, setToastMsg] = useState('');
+  const [viewMode, setViewMode] = useState('card');
+  const [activeTab, setActiveTab] = useState('processo');
 
-  // Formata a data removendo a hora e invertendo para DD/MM/AAAA
   const formatarData = (dataString) => {
     if (!dataString || dataString === '-') return '-';
     const apenasData = dataString.split(/[T ]/)[0];
@@ -31,7 +28,6 @@ export default function App() {
     return apenasData;
   };
 
-  // Funções flexíveis para ler os dados das colunas
   const getNumero = (item) => item['Número da Proposição'] || item['Numero da Proposicao'] || item['numero'] || '';
   const getEmenta = (item) => item['Ementa'] || item['ementa'] || item['EMENTA'] || item['Resumo'] || '';
   const getUltimoMovimento = (item) => item['Último Movimento'] || item['Ultimo Movimento'] || item['Ultimo movimento'] || item['ultimo movimento'] || '';
@@ -40,8 +36,9 @@ export default function App() {
   const getSetor = (item) => item['Setor Atual'] || item['Setor atual'] || item['setor'] || '';
   const getObservacoes = (item) => item['Observações'] || item['Observacoes'] || item['observacoes'] || '';
   const getLink = (item) => item['Link'] || item['link'] || '';
+  // NOVA LEITURA
+  const getPedidoVista = (item) => item['Pedido de Vista'] || item['pedido de vista'] || item['Pedido de vista'] || '';
 
-  // Chamada de ambiente segura para funcionar tanto localmente, no Vercel, e no Canvas.
   const API_URL = (import.meta && import.meta.env && import.meta.env.VITE_GOOGLE_SCRIPT_URL) || "";
 
   const fetchData = async () => {
@@ -49,7 +46,7 @@ export default function App() {
     setError(null);
     try {
       if (!API_URL) {
-        throw new Error("A variável VITE_GOOGLE_SCRIPT_URL não foi encontrada.");
+        throw new Error("A URL da API não foi definida.");
       }
 
       const response = await fetch(API_URL);
@@ -105,33 +102,29 @@ export default function App() {
     fetchData();
   }, []);
 
-  // FILTRAGEM INTELIGENTE (Abas + Pesquisa)
   const filteredData = data.filter(item => {
     const num = getNumero(item).toUpperCase();
     if (!num) return false;
 
-    // Extrai o prefixo (Ex: "PL./0123" -> "PL")
     const prefix = num.split('/')[0].replace('.', ''); 
-    
-    // Prefixos clássicos de Processo Legislativo da ALESC
     const processoPrefixes = ['PL', 'PEC', 'PLC', 'PDL', 'PRC', 'MPV', 'VET', 'MSG'];
     
-    // Filtro por Aba
     const isProcesso = processoPrefixes.includes(prefix);
     if (activeTab === 'processo' && !isProcesso) return false;
     if (activeTab === 'atividade' && isProcesso) return false;
 
-    // Filtro por Texto Pesquisado
     const term = searchTerm.toLowerCase();
     if (term) {
       const relator = getRelator(item).toLowerCase();
       const situacao = getSituacao(item).toLowerCase();
       const ementa = getEmenta(item).toLowerCase();
+      const vista = getPedidoVista(item).toLowerCase();
       
       return num.toLowerCase().includes(term) || 
              relator.includes(term) || 
              situacao.includes(term) || 
-             ementa.includes(term);
+             ementa.includes(term) ||
+             vista.includes(term);
     }
     
     return true;
@@ -139,7 +132,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#f8f9fa] text-black font-sans p-4 md:p-8 selection:bg-[#ffdb58] selection:text-black">
-      {/* HEADER ESTILO MONDRIAN */}
       <div className="max-w-7xl mx-auto mb-8">
         <div className="border-[6px] border-black bg-white grid grid-cols-1 md:grid-cols-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
           <div className="md:col-span-3 p-6 md:p-10 border-b-[6px] md:border-b-0 md:border-r-[6px] border-black flex flex-col justify-center">
@@ -152,17 +144,7 @@ export default function App() {
           </div>
           <div className="grid grid-cols-2 md:grid-cols-1 grid-rows-2">
             <div className={`border-r-[6px] md:border-r-0 md:border-b-[6px] border-black p-4 flex items-center justify-center ${MONDRIAN_COLORS[0]}`}>
-              <svg 
-                xmlns="http://www.w3.org/2000/svg" 
-                viewBox="0 0 24 24" 
-                fill="none" 
-                stroke="currentColor" 
-                strokeWidth="2" 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                className={`w-10 h-10 text-white cursor-pointer hover:rotate-180 transition-transform duration-500 ${loading ? 'animate-spin' : ''}`}
-                onClick={fetchData} 
-              >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`w-10 h-10 text-white cursor-pointer hover:rotate-180 transition-transform duration-500 ${loading ? 'animate-spin' : ''}`} onClick={fetchData} >
                 <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
                 <path d="M3 3v5h5"/>
               </svg>
@@ -175,65 +157,39 @@ export default function App() {
       </div>
 
       <div className="max-w-7xl mx-auto">
-        
-        {/* NAVEGAÇÃO DE ABAS */}
         <div className="flex flex-col md:flex-row mb-6 border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white overflow-hidden">
-          <button 
-             onClick={() => setActiveTab('processo')}
-             className={`flex-1 p-4 font-black uppercase text-lg md:border-r-[4px] border-black transition-colors flex items-center justify-center gap-3 ${activeTab === 'processo' ? MONDRIAN_COLORS[0] + ' text-white' : 'hover:bg-gray-100 text-gray-400'}`}
-          >
+          <button onClick={() => setActiveTab('processo')} className={`flex-1 p-4 font-black uppercase text-lg md:border-r-[4px] border-black transition-colors flex items-center justify-center gap-3 ${activeTab === 'processo' ? MONDRIAN_COLORS[0] + ' text-white' : 'hover:bg-gray-100 text-gray-400'}`}>
              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
              Processo Legislativo
           </button>
-          <button 
-             onClick={() => setActiveTab('atividade')}
-             className={`flex-1 p-4 font-black uppercase text-lg transition-colors flex items-center justify-center gap-3 ${activeTab === 'atividade' ? MONDRIAN_COLORS[1] + ' text-white' : 'hover:bg-gray-100 text-gray-400'}`}
-          >
+          <button onClick={() => setActiveTab('atividade')} className={`flex-1 p-4 font-black uppercase text-lg transition-colors flex items-center justify-center gap-3 ${activeTab === 'atividade' ? MONDRIAN_COLORS[1] + ' text-white' : 'hover:bg-gray-100 text-gray-400'}`}>
              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
              Atividade Parlamentar
           </button>
         </div>
 
         <div className="flex flex-col md:flex-row gap-4 mb-8">
-          {/* BARRA DE PESQUISA */}
           <div className="flex-1 relative flex border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white focus-within:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] focus-within:-translate-y-0.5 transition-all">
             <div className={`w-4 border-r-[4px] border-black ${activeTab === 'processo' ? MONDRIAN_COLORS[0] : MONDRIAN_COLORS[1]}`}></div>
             <div className="p-4 flex items-center justify-center border-r-[4px] border-black">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
-                <circle cx="11" cy="11" r="8"/>
-                <path d="m21 21-4.3-4.3"/>
-              </svg>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
             </div>
-            <input
-              type="text"
-              placeholder="Buscar por número, ementa, relator ou situação..."
-              className="w-full p-4 text-xl font-bold outline-none placeholder-gray-400"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+            <input type="text" placeholder="Buscar por número, ementa, relator, situação ou vista..." className="w-full p-4 text-xl font-bold outline-none placeholder-gray-400" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
           </div>
 
-          {/* TOGGLE VISUALIZAÇÃO */}
           <div className="flex border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white self-stretch">
-            <button
-              onClick={() => setViewMode('card')}
-              className={`flex-1 md:flex-none px-6 py-4 font-black uppercase flex items-center justify-center gap-2 transition-colors ${viewMode === 'card' ? 'bg-[#ffdb58]' : 'hover:bg-gray-100'}`}
-            >
+            <button onClick={() => setViewMode('card')} className={`flex-1 md:flex-none px-6 py-4 font-black uppercase flex items-center justify-center gap-2 transition-colors ${viewMode === 'card' ? 'bg-[#ffdb58]' : 'hover:bg-gray-100'}`}>
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
               Cards
             </button>
             <div className="w-[4px] bg-black"></div>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`flex-1 md:flex-none px-6 py-4 font-black uppercase flex items-center justify-center gap-2 transition-colors ${viewMode === 'list' ? 'bg-black text-white' : 'hover:bg-gray-100'}`}
-            >
+            <button onClick={() => setViewMode('list')} className={`flex-1 md:flex-none px-6 py-4 font-black uppercase flex items-center justify-center gap-2 transition-colors ${viewMode === 'list' ? 'bg-black text-white' : 'hover:bg-gray-100'}`}>
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
               Lista
             </button>
           </div>
         </div>
 
-        {/* FEEDBACK DE ESTADO */}
         {loading && (
           <div className="text-center p-20 border-[6px] border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
             <h2 className="text-3xl font-black uppercase animate-pulse">A Carregar Dados...</h2>
@@ -242,11 +198,7 @@ export default function App() {
 
         {error && (
           <div className="p-8 border-[6px] border-black bg-[#c41e3a] text-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] flex items-center gap-4">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-12 h-12 flex-shrink-0">
-              <circle cx="12" cy="12" r="10"/>
-              <path d="M12 8v4"/>
-              <path d="M12 16h.01"/>
-            </svg>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-12 h-12 flex-shrink-0"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
             <div>
               <h2 className="text-2xl font-black uppercase mb-2">Erro de Ligação</h2>
               <p className="font-bold text-lg">{error}</p>
@@ -254,7 +206,7 @@ export default function App() {
           </div>
         )}
 
-        {}
+        {/* CARDS */}
         {!loading && !error && viewMode === 'card' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredData.map((item, index) => {
@@ -264,35 +216,44 @@ export default function App() {
               const ultimoMovimentoProp = getUltimoMovimento(item);
               const obsProp = getObservacoes(item);
               const linkProp = getLink(item);
+              const vistaProp = getPedidoVista(item);
               
               const movLower = (ultimoMovimentoProp || '').toLowerCase();
               const sitLower = (getSituacao(item) || '').toLowerCase();
 
-              // Lógica de Cores da Caixa de Último Movimento
-              let boxColorClass = 'bg-white text-black';
+              // LÓGICA DE CORES INTELIGENTE ATUALIZADA
+              let boxColorClass = 'bg-[#ffdb58]/30 text-black border-black';
               let titleColorClass = 'text-black';
               let boxTitle = 'Último Movimento';
+              let iconeCaixa = <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>;
+              let textoCaixa = ultimoMovimentoProp || '-';
 
-              if (movLower.includes('vista')) {
-                boxColorClass = 'bg-[#c41e3a] text-white';
+              if (vistaProp) {
+                // PRIORIDADE 1: Se tem Pedido de Vista explícito
+                boxColorClass = 'bg-[#c41e3a] text-white border-black';
                 titleColorClass = 'text-white';
-                boxTitle = 'Pedido de Vista';
-              } else if (movLower.includes('concluíd') || movLower.includes('aprovad') || sitLower.includes('concluíd') || sitLower.includes('aprovad') || sitLower.includes('arquivad')) {
-                boxColorClass = 'bg-[#008080] text-white';
+                boxTitle = 'Pedido de Vista Ativo';
+                iconeCaixa = <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>;
+                textoCaixa = `Vista de ${vistaProp}`;
+              } else if (movLower.includes('vista')) {
+                // PRIORIDADE 2: Se tem a palavra Vista na movimentação
+                boxColorClass = 'bg-[#c41e3a] text-white border-black';
                 titleColorClass = 'text-white';
+                boxTitle = 'Movimentação: Pedido de Vista';
+              } else if (movLower.includes('concluíd') || movLower.includes('aprovad') || sitLower.includes('concluíd') || sitLower.includes('aprovad') || sitLower.includes('arquivad') || sitLower.includes('encaminhado')) {
+                // PRIORIDADE 3: Aprovado, Arquivado ou Encaminhado (Positivo)
+                boxColorClass = 'bg-[#008080] text-white border-black';
+                titleColorClass = 'text-white';
+                iconeCaixa = <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><polyline points="20 6 9 17 4 12"/></svg>;
               } else if (movLower.includes('aguardando') || movLower.includes('comissão') || sitLower.includes('aguardando') || sitLower.includes('comissão')) {
-                boxColorClass = 'bg-[#ffdb58] text-black';
+                // PRIORIDADE 4: Aguardando/Tramitando
+                boxColorClass = 'bg-[#ffdb58] text-black border-black';
                 titleColorClass = 'text-black';
-              } else if (ultimoMovimentoProp) {
-                boxColorClass = 'bg-[#ffdb58]/30 text-black';
+                iconeCaixa = <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
               }
 
               return (
-                <div 
-                  key={index} 
-                  className="bg-white border-[5px] border-black flex flex-col shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 hover:shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] transition-all duration-200"
-                >
-                  {/* Cabeçalho do Card */}
+                <div key={index} className="bg-white border-[5px] border-black flex flex-col shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 hover:shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] transition-all duration-200">
                   <div className={`border-b-[5px] border-black p-4 flex justify-between items-start ${colorClass}`}>
                     <div>
                       <span className="bg-black text-white px-2 py-1 text-xs font-black tracking-widest uppercase">
@@ -303,38 +264,24 @@ export default function App() {
                       </h3>
                     </div>
                     {linkProp && linkProp !== '-' && (
-                      <a 
-                        href={linkProp} 
-                        target="_blank" 
-                        rel="noreferrer"
-                        className="bg-white p-2 border-2 border-black hover:bg-gray-200 transition-colors"
-                        title="Ver na ALESC"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-black">
-                          <path d="M15 3h6v6"/>
-                          <path d="M10 14 21 3"/>
-                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                        </svg>
+                      <a href={linkProp} target="_blank" rel="noreferrer" className="bg-white p-2 border-2 border-black hover:bg-gray-200 transition-colors" title="Ver na ALESC">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-black"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
                       </a>
                     )}
                   </div>
 
                   <div className="p-5 flex-grow flex flex-col gap-4">
-                    
-                    {/* CAIXA DE ÚLTIMO MOVIMENTO (Posicionada ACIMA da ementa e colorida dinamicamente) */}
-                    <div className={`border-[3px] border-black p-3 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] ${boxColorClass}`}>
+                    {/* CAIXA DE ÚLTIMO MOVIMENTO E VISTAS - AGORA NO TOPO */}
+                    <div className={`border-[3px] p-3 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] ${boxColorClass}`}>
                       <p className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1 mb-1 ${titleColorClass}`}>
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3">
-                          <circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>
-                        </svg>
+                        {iconeCaixa}
                         {boxTitle}
                       </p>
                       <p className={`text-sm font-bold leading-snug ${titleColorClass}`}>
-                         {ultimoMovimentoProp || '-'}
+                         {textoCaixa}
                       </p>
                     </div>
 
-                    {/* Ementa do Projeto (Resumo) */}
                     <div className="bg-gray-50 border-[2px] border-black p-3 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
                       <p className="text-[10px] font-black text-gray-800 uppercase tracking-wider mb-1">Ementa / Resumo</p>
                       <p className="text-sm font-bold text-gray-800 leading-snug">
@@ -352,7 +299,7 @@ export default function App() {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <p className="text-xs font-bold text-gray-500 uppercase">Setor Atual</p>
-                        <p className="font-bold leading-snug">{getSetor(item) || '-'}</p>
+                        <p className="font-bold leading-snug truncate">{getSetor(item) || '-'}</p>
                       </div>
                       <div>
                         <p className="text-xs font-bold text-gray-500 uppercase">Data Verificação</p>
@@ -360,33 +307,26 @@ export default function App() {
                       </div>
                     </div>
 
-                    <div className="pt-4 border-t-[3px] border-black border-dashed flex justify-between items-center">
-                      <div>
-                        <p className="text-xs font-bold text-gray-500 uppercase">Relator(a)</p>
-                        <p className="font-black text-[15px] uppercase">{getRelator(item) || '-'}</p>
+                    {activeTab === 'processo' && (
+                      <div className="pt-4 border-t-[3px] border-black border-dashed flex justify-between items-center">
+                        <div className="overflow-hidden">
+                          <p className="text-xs font-bold text-gray-500 uppercase">Relator(a)</p>
+                          <p className="font-black text-[15px] uppercase truncate" title={getRelator(item)}>{getRelator(item) || '-'}</p>
+                        </div>
+                        <div className="text-right flex-shrink-0 ml-2">
+                           <p className="text-xs font-bold text-gray-500 uppercase">Distribuição</p>
+                           <p className="font-bold">{formatarData(item['Data de Distribuição'])}</p>
+                        </div>
                       </div>
-                      <div className="text-right">
-                         <p className="text-xs font-bold text-gray-500 uppercase">Distribuição</p>
-                         <p className="font-bold">{formatarData(item['Data de Distribuição'])}</p>
-                      </div>
-                    </div>
+                    )}
 
-                    {/* SESSÃO: EDIÇÃO DE OBSERVAÇÕES */}
                     <div className="mt-auto pt-4 border-t-[3px] border-black bg-gray-50 -mx-5 px-5 pb-5 -mb-5 flex-grow-0">
                       <div className="flex justify-between items-center mb-2">
                         <p className="text-xs font-black text-gray-800 uppercase flex items-center gap-2">
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                          </svg> Notas Internas
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Notas Internas
                         </p>
                         {editingId !== numeroProp && (
-                          <button 
-                            onClick={() => {
-                              setEditingId(numeroProp);
-                              setEditValue(obsProp || '');
-                            }}
-                            className="text-xs font-bold uppercase underline hover:text-[#008080] transition-colors"
-                          >
+                          <button onClick={() => { setEditingId(numeroProp); setEditValue(obsProp || ''); }} className="text-xs font-bold uppercase underline hover:text-[#008080] transition-colors">
                             Editar
                           </button>
                         )}
@@ -394,32 +334,14 @@ export default function App() {
                       
                       {editingId === numeroProp ? (
                         <div className="flex flex-col gap-2">
-                          <textarea 
-                            className="w-full border-2 border-black p-2 text-sm font-bold resize-none outline-none focus:border-[#008080]"
-                            rows="3"
-                            value={editValue}
-                            onChange={(e) => setEditValue(e.target.value)}
-                            placeholder="Escreva uma anotação aqui..."
-                          />
+                          <textarea className="w-full border-2 border-black p-2 text-sm font-bold resize-none outline-none focus:border-[#008080]" rows="3" value={editValue} onChange={(e) => setEditValue(e.target.value)} placeholder="Escreva uma anotação aqui..."/>
                           <div className="flex gap-2 justify-end">
-                            <button 
-                              onClick={() => setEditingId(null)}
-                              className="px-3 py-1 bg-white border-2 border-black text-xs font-bold uppercase hover:bg-gray-200 transition-colors"
-                              disabled={isSaving}
-                            >
-                              Cancelar
-                            </button>
-                            <button 
-                              onClick={() => handleSaveObservacao(numeroProp)}
-                              className={`px-3 py-1 border-2 border-black text-xs font-black uppercase text-white ${MONDRIAN_COLORS[1]} hover:opacity-90 flex items-center gap-2 transition-opacity`}
-                              disabled={isSaving}
-                            >
-                              {isSaving ? 'A guardar...' : 'Guardar'}
-                            </button>
+                            <button onClick={() => setEditingId(null)} className="px-3 py-1 bg-white border-2 border-black text-xs font-bold uppercase hover:bg-gray-200 transition-colors" disabled={isSaving}>Cancelar</button>
+                            <button onClick={() => handleSaveObservacao(numeroProp)} className={`px-3 py-1 border-2 border-black text-xs font-black uppercase text-white ${MONDRIAN_COLORS[1]} hover:opacity-90 flex items-center gap-2 transition-opacity`} disabled={isSaving}>{isSaving ? 'A guardar...' : 'Guardar'}</button>
                           </div>
                         </div>
                       ) : (
-                        <p className="text-sm font-bold text-gray-700 min-h-[2rem]">
+                        <p className="text-sm font-bold text-gray-700 min-h-[2rem] whitespace-pre-wrap">
                           {obsProp || <span className="text-gray-400 italic font-normal">Nenhuma observação inserida.</span>}
                         </p>
                       )}
@@ -431,7 +353,7 @@ export default function App() {
           </div>
         )}
 
-        {}
+        {/* LISTA */}
         {!loading && !error && viewMode === 'list' && (
           <div className="flex flex-col gap-4">
             {filteredData.map((item, index) => {
@@ -441,6 +363,7 @@ export default function App() {
               const ultimoMovimentoProp = getUltimoMovimento(item);
               const obsProp = getObservacoes(item);
               const linkProp = getLink(item);
+              const vistaProp = getPedidoVista(item);
 
               const movLower = (ultimoMovimentoProp || '').toLowerCase();
               const sitLower = (getSituacao(item) || '').toLowerCase();
@@ -448,12 +371,18 @@ export default function App() {
               let boxColorClass = 'bg-white text-black';
               let titleColorClass = 'text-black';
               let boxTitle = 'Último Movimento';
+              let textoCaixa = ultimoMovimentoProp || '-';
 
-              if (movLower.includes('vista')) {
+              if (vistaProp) {
                 boxColorClass = 'bg-[#c41e3a] text-white';
                 titleColorClass = 'text-white';
                 boxTitle = 'Pedido de Vista';
-              } else if (movLower.includes('concluíd') || movLower.includes('aprovad') || sitLower.includes('concluíd') || sitLower.includes('aprovad') || sitLower.includes('arquivad')) {
+                textoCaixa = vistaProp;
+              } else if (movLower.includes('vista')) {
+                boxColorClass = 'bg-[#c41e3a] text-white';
+                titleColorClass = 'text-white';
+                boxTitle = 'Pedido de Vista';
+              } else if (movLower.includes('concluíd') || movLower.includes('aprovad') || sitLower.includes('concluíd') || sitLower.includes('aprovad') || sitLower.includes('arquivad') || sitLower.includes('encaminhado')) {
                 boxColorClass = 'bg-[#008080] text-white';
                 titleColorClass = 'text-white';
               } else if (movLower.includes('aguardando') || movLower.includes('comissão') || sitLower.includes('aguardando') || sitLower.includes('comissão')) {
@@ -473,21 +402,18 @@ export default function App() {
                         {numeroProp}
                       </span>
                       {linkProp && linkProp !== '-' && (
-                        <a href={linkProp} target="_blank" rel="noreferrer" className="text-xs font-black uppercase underline hover:text-black text-gray-600">
-                          Ver na ALESC
-                        </a>
+                        <a href={linkProp} target="_blank" rel="noreferrer" className="text-xs font-black uppercase underline hover:text-[#008080]">Ver na ALESC</a>
                       )}
                     </div>
 
                     <div className="flex-grow grid grid-cols-1 md:grid-cols-12 gap-4 w-full">
-                      {/* Na lista, a caixa colorida toma destaque na primeira coluna */}
-                      <div className="md:col-span-5">
+                      <div className="md:col-span-4">
                         <div className={`p-2 border-[2px] border-black ${boxColorClass} h-full flex flex-col justify-center`}>
                           <p className={`text-[10px] font-black uppercase tracking-wider mb-1 ${titleColorClass}`}>{boxTitle}</p>
-                          <p className={`text-sm font-bold line-clamp-3 ${titleColorClass}`} title={ultimoMovimentoProp}>{ultimoMovimentoProp || '-'}</p>
+                          <p className={`text-sm font-bold line-clamp-3 ${titleColorClass}`} title={textoCaixa}>{textoCaixa}</p>
                         </div>
                       </div>
-                      <div className="md:col-span-4 flex flex-col justify-center">
+                      <div className="md:col-span-5 flex flex-col justify-center">
                         <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Ementa</p>
                         <p className="text-sm font-bold text-gray-800 line-clamp-3" title={ementaProp}>{ementaProp || '-'}</p>
                       </div>
@@ -502,42 +428,16 @@ export default function App() {
                       <div className="flex justify-between items-center mb-2">
                         <p className="text-xs font-black text-gray-800 uppercase flex items-center gap-1">Notas</p>
                         {editingId !== numeroProp && (
-                          <button 
-                            onClick={() => {
-                              setEditingId(numeroProp);
-                              setEditValue(obsProp || '');
-                            }}
-                            className="text-[10px] font-bold uppercase underline hover:text-[#008080] transition-colors"
-                          >
-                            Editar
-                          </button>
+                          <button onClick={() => { setEditingId(numeroProp); setEditValue(obsProp || ''); }} className="text-[10px] font-bold uppercase underline hover:text-[#008080] transition-colors">Editar</button>
                         )}
                       </div>
                       
                       {editingId === numeroProp ? (
                         <div className="flex flex-col gap-2">
-                          <textarea 
-                            className="w-full border-2 border-black p-1 text-xs font-bold resize-none outline-none focus:border-[#008080]"
-                            rows="2"
-                            value={editValue}
-                            onChange={(e) => setEditValue(e.target.value)}
-                            placeholder="Anotação..."
-                          />
+                          <textarea className="w-full border-2 border-black p-1 text-xs font-bold resize-none outline-none focus:border-[#008080]" rows="2" value={editValue} onChange={(e) => setEditValue(e.target.value)} placeholder="Anotação..."/>
                           <div className="flex gap-1 justify-end">
-                            <button 
-                              onClick={() => setEditingId(null)}
-                              className="px-2 py-1 bg-white border-2 border-black text-[10px] font-bold uppercase hover:bg-gray-200 transition-colors"
-                              disabled={isSaving}
-                            >
-                              X
-                            </button>
-                            <button 
-                              onClick={() => handleSaveObservacao(numeroProp)}
-                              className={`px-2 py-1 border-2 border-black text-[10px] font-black uppercase text-white ${MONDRIAN_COLORS[1]} hover:opacity-90 transition-opacity`}
-                              disabled={isSaving}
-                            >
-                              {isSaving ? '...' : 'OK'}
-                            </button>
+                            <button onClick={() => setEditingId(null)} className="px-2 py-1 bg-white border-2 border-black text-[10px] font-bold uppercase hover:bg-gray-200 transition-colors" disabled={isSaving}>X</button>
+                            <button onClick={() => handleSaveObservacao(numeroProp)} className={`px-2 py-1 border-2 border-black text-[10px] font-black uppercase text-white ${MONDRIAN_COLORS[1]} hover:opacity-90 transition-opacity`} disabled={isSaving}>{isSaving ? '...' : 'OK'}</button>
                           </div>
                         </div>
                       ) : (
@@ -561,8 +461,6 @@ export default function App() {
         )}
       </div>
 
-      {}
-      {/* TOAST DE AVISOS */}
       {toastMsg && (
         <div className="fixed bottom-6 right-6 p-4 border-[4px] border-black bg-[#ffdb58] text-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] z-50 flex items-center gap-3 animate-bounce">
            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>

@@ -15,9 +15,9 @@ export default function App() {
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const [toastMsg, setToastMsg] = useState('');
-  const [viewMode, setViewMode] = useState('card');
-  const [activeTab, setActiveTab] = useState('processo');
+  const [toastMsg, setToastMsg] = useState(''); 
+  const [viewMode, setViewMode] = useState('card'); 
+  const [activeTab, setActiveTab] = useState('processo'); 
 
   const formatarData = (dataString) => {
     if (!dataString || dataString === '-') return '-';
@@ -36,8 +36,16 @@ export default function App() {
   const getSetor = (item) => item['Setor Atual'] || item['Setor atual'] || item['setor'] || '';
   const getObservacoes = (item) => item['Observações'] || item['Observacoes'] || item['observacoes'] || '';
   const getLink = (item) => item['Link'] || item['link'] || '';
-  // NOVA LEITURA
-  const getPedidoVista = (item) => item['Pedido de Vista'] || item['pedido de vista'] || item['Pedido de vista'] || '';
+  
+  // Funções de Leitura Segura
+  const getPedidoVista = (item) => {
+      let v = item['Pedido de Vista'] || item['pedido de vista'] || item['Pedido de vista'] || '';
+      return (v === '-') ? '' : v;
+  };
+  const getInformacaoRelatoria = (item) => {
+      let r = item['Informação da Relatoria'] || item['Informacao da relatoria'] || item['Informacao da Relatoria'] || item['informacao_relatoria'] || '';
+      return (r === '-') ? '' : r;
+  };
 
   const API_URL = (import.meta && import.meta.env && import.meta.env.VITE_GOOGLE_SCRIPT_URL) || "";
 
@@ -46,7 +54,7 @@ export default function App() {
     setError(null);
     try {
       if (!API_URL) {
-        throw new Error("A URL da API não foi definida.");
+        throw new Error("A variável VITE_GOOGLE_SCRIPT_URL não foi encontrada.");
       }
 
       const response = await fetch(API_URL);
@@ -144,7 +152,17 @@ export default function App() {
           </div>
           <div className="grid grid-cols-2 md:grid-cols-1 grid-rows-2">
             <div className={`border-r-[6px] md:border-r-0 md:border-b-[6px] border-black p-4 flex items-center justify-center ${MONDRIAN_COLORS[0]}`}>
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`w-10 h-10 text-white cursor-pointer hover:rotate-180 transition-transform duration-500 ${loading ? 'animate-spin' : ''}`} onClick={fetchData} >
+              <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                className={`w-10 h-10 text-white cursor-pointer hover:rotate-180 transition-transform duration-500 ${loading ? 'animate-spin' : ''}`}
+                onClick={fetchData} 
+              >
                 <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
                 <path d="M3 3v5h5"/>
               </svg>
@@ -158,11 +176,17 @@ export default function App() {
 
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col md:flex-row mb-6 border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white overflow-hidden">
-          <button onClick={() => setActiveTab('processo')} className={`flex-1 p-4 font-black uppercase text-lg md:border-r-[4px] border-black transition-colors flex items-center justify-center gap-3 ${activeTab === 'processo' ? MONDRIAN_COLORS[0] + ' text-white' : 'hover:bg-gray-100 text-gray-400'}`}>
+          <button 
+             onClick={() => setActiveTab('processo')}
+             className={`flex-1 p-4 font-black uppercase text-lg md:border-r-[4px] border-black transition-colors flex items-center justify-center gap-3 ${activeTab === 'processo' ? MONDRIAN_COLORS[0] + ' text-white' : 'hover:bg-gray-100 text-gray-400'}`}
+          >
              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
              Processo Legislativo
           </button>
-          <button onClick={() => setActiveTab('atividade')} className={`flex-1 p-4 font-black uppercase text-lg transition-colors flex items-center justify-center gap-3 ${activeTab === 'atividade' ? MONDRIAN_COLORS[1] + ' text-white' : 'hover:bg-gray-100 text-gray-400'}`}>
+          <button 
+             onClick={() => setActiveTab('atividade')}
+             className={`flex-1 p-4 font-black uppercase text-lg transition-colors flex items-center justify-center gap-3 ${activeTab === 'atividade' ? MONDRIAN_COLORS[1] + ' text-white' : 'hover:bg-gray-100 text-gray-400'}`}
+          >
              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
              Atividade Parlamentar
           </button>
@@ -172,18 +196,33 @@ export default function App() {
           <div className="flex-1 relative flex border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white focus-within:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] focus-within:-translate-y-0.5 transition-all">
             <div className={`w-4 border-r-[4px] border-black ${activeTab === 'processo' ? MONDRIAN_COLORS[0] : MONDRIAN_COLORS[1]}`}></div>
             <div className="p-4 flex items-center justify-center border-r-[4px] border-black">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+                <circle cx="11" cy="11" r="8"/>
+                <path d="m21 21-4.3-4.3"/>
+              </svg>
             </div>
-            <input type="text" placeholder="Buscar por número, ementa, relator, situação ou vista..." className="w-full p-4 text-xl font-bold outline-none placeholder-gray-400" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+            <input
+              type="text"
+              placeholder="Buscar por número, ementa, relator, situação ou vista..."
+              className="w-full p-4 text-xl font-bold outline-none placeholder-gray-400"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
 
           <div className="flex border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white self-stretch">
-            <button onClick={() => setViewMode('card')} className={`flex-1 md:flex-none px-6 py-4 font-black uppercase flex items-center justify-center gap-2 transition-colors ${viewMode === 'card' ? 'bg-[#ffdb58]' : 'hover:bg-gray-100'}`}>
+            <button
+              onClick={() => setViewMode('card')}
+              className={`flex-1 md:flex-none px-6 py-4 font-black uppercase flex items-center justify-center gap-2 transition-colors ${viewMode === 'card' ? 'bg-[#ffdb58]' : 'hover:bg-gray-100'}`}
+            >
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
               Cards
             </button>
             <div className="w-[4px] bg-black"></div>
-            <button onClick={() => setViewMode('list')} className={`flex-1 md:flex-none px-6 py-4 font-black uppercase flex items-center justify-center gap-2 transition-colors ${viewMode === 'list' ? 'bg-black text-white' : 'hover:bg-gray-100'}`}>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`flex-1 md:flex-none px-6 py-4 font-black uppercase flex items-center justify-center gap-2 transition-colors ${viewMode === 'list' ? 'bg-black text-white' : 'hover:bg-gray-100'}`}
+            >
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
               Lista
             </button>
@@ -198,7 +237,11 @@ export default function App() {
 
         {error && (
           <div className="p-8 border-[6px] border-black bg-[#c41e3a] text-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] flex items-center gap-4">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-12 h-12 flex-shrink-0"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-12 h-12 flex-shrink-0">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 8v4"/>
+              <path d="M12 16h.01"/>
+            </svg>
             <div>
               <h2 className="text-2xl font-black uppercase mb-2">Erro de Ligação</h2>
               <p className="font-bold text-lg">{error}</p>
@@ -206,7 +249,7 @@ export default function App() {
           </div>
         )}
 
-        {/* CARDS */}
+        {/* MODO CARDS */}
         {!loading && !error && viewMode === 'card' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredData.map((item, index) => {
@@ -217,43 +260,50 @@ export default function App() {
               const obsProp = getObservacoes(item);
               const linkProp = getLink(item);
               const vistaProp = getPedidoVista(item);
+              const infoRelatoriaProp = getInformacaoRelatoria(item);
               
-              const movLower = (ultimoMovimentoProp || '').toLowerCase();
               const sitLower = (getSituacao(item) || '').toLowerCase();
 
-              // LÓGICA DE CORES INTELIGENTE ATUALIZADA
-              let boxColorClass = 'bg-[#ffdb58]/30 text-black border-black';
+              // LÓGICA MONDRIAN (Cores e Título do Movimento)
+              let boxColorClass = 'bg-[#ffdb58]/30 text-black border-black'; // Default claro
               let titleColorClass = 'text-black';
               let boxTitle = 'Último Movimento';
               let iconeCaixa = <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>;
-              let textoCaixa = ultimoMovimentoProp || '-';
+              
+              // Define o texto priorizando: 1) Info Relatoria (se houver) -> 2) Último Movimento da Timeline
+              let textoCaixa = infoRelatoriaProp ? infoRelatoriaProp : (ultimoMovimentoProp || '-');
 
               if (vistaProp) {
-                // PRIORIDADE 1: Se tem Pedido de Vista explícito
+                // PRIORIDADE 1: Pedido de Vista Explícito
                 boxColorClass = 'bg-[#c41e3a] text-white border-black';
                 titleColorClass = 'text-white';
                 boxTitle = 'Pedido de Vista Ativo';
                 iconeCaixa = <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>;
                 textoCaixa = `Vista de ${vistaProp}`;
-              } else if (movLower.includes('vista')) {
-                // PRIORIDADE 2: Se tem a palavra Vista na movimentação
-                boxColorClass = 'bg-[#c41e3a] text-white border-black';
-                titleColorClass = 'text-white';
-                boxTitle = 'Movimentação: Pedido de Vista';
-              } else if (movLower.includes('concluíd') || movLower.includes('aprovad') || sitLower.includes('concluíd') || sitLower.includes('aprovad') || sitLower.includes('arquivad') || sitLower.includes('encaminhado')) {
-                // PRIORIDADE 3: Aprovado, Arquivado ou Encaminhado (Positivo)
-                boxColorClass = 'bg-[#008080] text-white border-black';
-                titleColorClass = 'text-white';
-                iconeCaixa = <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><polyline points="20 6 9 17 4 12"/></svg>;
-              } else if (movLower.includes('aguardando') || movLower.includes('comissão') || sitLower.includes('aguardando') || sitLower.includes('comissão')) {
-                // PRIORIDADE 4: Aguardando/Tramitando
-                boxColorClass = 'bg-[#ffdb58] text-black border-black';
-                titleColorClass = 'text-black';
-                iconeCaixa = <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
+              } else {
+                const textoLower = textoCaixa.toLowerCase();
+                // PRIORIDADE 2: Concluído / Aprovado -> Azul Esverdeado
+                if (sitLower.includes('arquivad') || sitLower.includes('concluíd') || sitLower.includes('promulgad') || sitLower.includes('aprovad') || textoLower.includes('aprovado por unanimidade')) {
+                   boxColorClass = 'bg-[#008080] text-white border-black';
+                   titleColorClass = 'text-white';
+                   // Exceção: Se for só uma "diligência aprovada", ainda está a aguardar
+                   if (textoLower.includes('diligência') && !sitLower.includes('concluíd') && !sitLower.includes('arquivad')) {
+                       boxColorClass = 'bg-[#ffdb58] text-black border-black';
+                       titleColorClass = 'text-black';
+                   }
+                } 
+                // PRIORIDADE 3: Aguardando / Em Comissão -> Mostarda Forte
+                else if (sitLower.includes('aguardando') || sitLower.includes('comissão') || textoLower.includes('aguardando') || textoLower.includes('diligência')) {
+                   boxColorClass = 'bg-[#ffdb58] text-black border-black';
+                   titleColorClass = 'text-black';
+                }
               }
 
               return (
-                <div key={index} className="bg-white border-[5px] border-black flex flex-col shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 hover:shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] transition-all duration-200">
+                <div 
+                  key={index} 
+                  className="bg-white border-[5px] border-black flex flex-col shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 hover:shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] transition-all duration-200"
+                >
                   <div className={`border-b-[5px] border-black p-4 flex justify-between items-start ${colorClass}`}>
                     <div>
                       <span className="bg-black text-white px-2 py-1 text-xs font-black tracking-widest uppercase">
@@ -264,14 +314,25 @@ export default function App() {
                       </h3>
                     </div>
                     {linkProp && linkProp !== '-' && (
-                      <a href={linkProp} target="_blank" rel="noreferrer" className="bg-white p-2 border-2 border-black hover:bg-gray-200 transition-colors" title="Ver na ALESC">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-black"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+                      <a 
+                        href={linkProp} 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="bg-white p-2 border-2 border-black hover:bg-gray-200 transition-colors"
+                        title="Ver na ALESC"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-black">
+                          <path d="M15 3h6v6"/>
+                          <path d="M10 14 21 3"/>
+                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                        </svg>
                       </a>
                     )}
                   </div>
 
                   <div className="p-5 flex-grow flex flex-col gap-4">
-                    {/* CAIXA DE ÚLTIMO MOVIMENTO E VISTAS - AGORA NO TOPO */}
+                    
+                    {/* CAIXA DE ÚLTIMO MOVIMENTO E VISTAS (NO TOPO, ANTES DA EMENTA) */}
                     <div className={`border-[3px] p-3 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] ${boxColorClass}`}>
                       <p className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1 mb-1 ${titleColorClass}`}>
                         {iconeCaixa}
@@ -282,6 +343,7 @@ export default function App() {
                       </p>
                     </div>
 
+                    {/* EMENTA */}
                     <div className="bg-gray-50 border-[2px] border-black p-3 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
                       <p className="text-[10px] font-black text-gray-800 uppercase tracking-wider mb-1">Ementa / Resumo</p>
                       <p className="text-sm font-bold text-gray-800 leading-snug">
@@ -353,7 +415,7 @@ export default function App() {
           </div>
         )}
 
-        {/* LISTA */}
+        {/* MODO LISTA */}
         {!loading && !error && viewMode === 'list' && (
           <div className="flex flex-col gap-4">
             {filteredData.map((item, index) => {
@@ -364,32 +426,36 @@ export default function App() {
               const obsProp = getObservacoes(item);
               const linkProp = getLink(item);
               const vistaProp = getPedidoVista(item);
+              const infoRelatoriaProp = getInformacaoRelatoria(item);
 
-              const movLower = (ultimoMovimentoProp || '').toLowerCase();
               const sitLower = (getSituacao(item) || '').toLowerCase();
 
-              let boxColorClass = 'bg-white text-black';
+              // LÓGICA MONDRIAN (Cores e Título do Movimento - LISTA)
+              let boxColorClass = 'bg-white text-black'; // Default claro
               let titleColorClass = 'text-black';
               let boxTitle = 'Último Movimento';
-              let textoCaixa = ultimoMovimentoProp || '-';
+              let textoCaixa = infoRelatoriaProp ? infoRelatoriaProp : (ultimoMovimentoProp || '-');
 
               if (vistaProp) {
                 boxColorClass = 'bg-[#c41e3a] text-white';
                 titleColorClass = 'text-white';
                 boxTitle = 'Pedido de Vista';
-                textoCaixa = vistaProp;
-              } else if (movLower.includes('vista')) {
-                boxColorClass = 'bg-[#c41e3a] text-white';
-                titleColorClass = 'text-white';
-                boxTitle = 'Pedido de Vista';
-              } else if (movLower.includes('concluíd') || movLower.includes('aprovad') || sitLower.includes('concluíd') || sitLower.includes('aprovad') || sitLower.includes('arquivad') || sitLower.includes('encaminhado')) {
-                boxColorClass = 'bg-[#008080] text-white';
-                titleColorClass = 'text-white';
-              } else if (movLower.includes('aguardando') || movLower.includes('comissão') || sitLower.includes('aguardando') || sitLower.includes('comissão')) {
-                boxColorClass = 'bg-[#ffdb58] text-black';
-                titleColorClass = 'text-black';
-              } else if (ultimoMovimentoProp) {
-                boxColorClass = 'bg-[#ffdb58]/30 text-black';
+                textoCaixa = `Vista de ${vistaProp}`;
+              } else {
+                const textoLower = textoCaixa.toLowerCase();
+                if (sitLower.includes('arquivad') || sitLower.includes('concluíd') || sitLower.includes('promulgad') || sitLower.includes('aprovad') || textoLower.includes('aprovado por unanimidade')) {
+                   boxColorClass = 'bg-[#008080] text-white';
+                   titleColorClass = 'text-white';
+                   if (textoLower.includes('diligência') && !sitLower.includes('concluíd') && !sitLower.includes('arquivad')) {
+                       boxColorClass = 'bg-[#ffdb58] text-black';
+                       titleColorClass = 'text-black';
+                   }
+                } else if (sitLower.includes('aguardando') || sitLower.includes('comissão') || textoLower.includes('aguardando') || textoLower.includes('diligência')) {
+                   boxColorClass = 'bg-[#ffdb58] text-black';
+                   titleColorClass = 'text-black';
+                } else if (textoCaixa !== '-') {
+                   boxColorClass = 'bg-[#ffdb58]/30 text-black';
+                }
               }
 
               return (

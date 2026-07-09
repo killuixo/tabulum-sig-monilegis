@@ -147,14 +147,14 @@ export default function App() {
               <img 
                 src="https://raw.githubusercontent.com/killuixo/tabulum-sig-monilegis/refs/heads/main/icon-192.png" 
                 alt="Ícone Tabulum" 
-                className="w-12 h-12 md:w-16 md:h-16 object-contain drop-shadow-md"
+                className="w-16 h-16 md:w-20 md:h-20 object-contain drop-shadow-md"
               />
               <h1 className="text-4xl md:text-6xl font-black uppercase tracking-tighter">
                 TABULUM
               </h1>
             </div>
             <p className="text-lg md:text-xl font-bold text-gray-700">
-              Monitor Legislativo do Mandato
+              Monitor Legislativo
             </p>
           </div>
           <div className={`p-4 flex items-center justify-center ${MONDRIAN_COLORS[0]}`}>
@@ -398,7 +398,7 @@ export default function App() {
               if (vistaProp) {
                 boxColorClass = 'bg-[#c41e3a] text-white';
                 titleColorClass = 'text-white';
-                boxTitle = 'Pedido de Vista Ativo';
+                boxTitle = 'Pedido de Vista';
                 textoCaixa = `Vista de ${vistaProp}`;
               } else {
                 const textoLower = textoCaixa.toLowerCase();

@@ -145,7 +145,6 @@ export default function App() {
     <div className="min-h-screen bg-[#f8f9fa] text-black font-sans p-4 md:p-8 selection:bg-[#ffdb58] selection:text-black">
       <div className="max-w-7xl mx-auto mb-8">
         <div className="border-[6px] border-black bg-white grid grid-cols-1 md:grid-cols-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-          {}
           <div className="md:col-span-3 p-6 md:p-10 border-b-[6px] md:border-b-0 md:border-r-[6px] border-black flex flex-row items-center gap-4 md:gap-6">
             <img 
               src="https://raw.githubusercontent.com/killuixo/tabulum-sig-monilegis/refs/heads/main/icon-192.png" 
@@ -182,7 +181,6 @@ export default function App() {
 
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col md:flex-row mb-6 border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white overflow-hidden">
-          {}
           <button 
              onClick={() => setActiveTab('processo')}
              className={`flex-1 p-4 font-black uppercase text-lg md:border-r-[4px] border-black transition-colors flex items-center justify-center gap-3 ${activeTab === 'processo' ? MONDRIAN_COLORS[0] + ' text-white' : 'hover:bg-gray-100 text-gray-400'}`}
@@ -240,7 +238,6 @@ export default function App() {
         {/* CARDS */}
         {!loading && !error && viewMode === 'card' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {}
             {filteredData.map((item, index) => {
               const numeroProp = getNumero(item) || 'S/N';
               const ementaProp = getEmenta(item);
@@ -253,7 +250,9 @@ export default function App() {
               const linksAdicProp = getLinksAdicionais(item);
               let parsedLinks = [];
               try {
-                if (linksAdicProp && linksAdicProp !== '-') parsedLinks = JSON.parse(linksAdicProp);
+                if (linksAdicProp && linksAdicProp !== '-' && linksAdicProp.startsWith('[')) {
+                  parsedLinks = JSON.parse(linksAdicProp);
+                }
               } catch(e) {}
 
               const sitLower = (getSituacao(item) || '').toLowerCase();
@@ -291,7 +290,7 @@ export default function App() {
                 <div key={index} className="bg-white border-[5px] border-black flex flex-col shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 hover:shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] transition-all duration-200">
                   <div className="border-b-[5px] border-black p-4 flex justify-between items-start bg-[#2a2a2a]">
                     <div>
-                      <span className="bg-white text-black border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] px-2 py-1 text-xs font-black tracking-widest uppercase">
+                      <span className="bg-[#2a2a2a] text-white border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] px-2 py-1 text-xs font-black tracking-widest uppercase">
                         {getTipoProposicao(item)}
                       </span>
                       <h3 className="text-3xl font-black mt-3 text-white tracking-tight">
@@ -383,12 +382,14 @@ export default function App() {
                       
                       {parsedLinks.length > 0 && (
                         <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t-[3px] border-black border-dashed">
-                          {parsedLinks.map((l, i) => (
-                            <a key={i} href={l.url} target="_blank" rel="noreferrer" className="text-[10px] font-black uppercase tracking-wider bg-black text-white border-2 border-black px-2 py-1 flex items-center gap-1 hover:bg-[#c41e3a] transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
-                              {l.label}
-                            </a>
-                          ))}
+                          {parsedLinks.map((l, i) => {
+                            return (
+                              <a key={i} href={l.url} target="_blank" rel="noreferrer" className="text-[10px] font-black uppercase tracking-wider bg-black text-white border-2 border-black px-2 py-1 flex items-center gap-1 hover:bg-[#c41e3a] transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+                                {l.label}
+                              </a>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -402,7 +403,6 @@ export default function App() {
         {/* LISTA */}
         {!loading && !error && viewMode === 'list' && (
           <div className="flex flex-col gap-4">
-            {}
             {filteredData.map((item, index) => {
               const numeroProp = getNumero(item) || 'S/N';
               const ementaProp = getEmenta(item);
@@ -415,7 +415,9 @@ export default function App() {
               const linksAdicProp = getLinksAdicionais(item);
               let parsedLinks = [];
               try {
-                if (linksAdicProp && linksAdicProp !== '-') parsedLinks = JSON.parse(linksAdicProp);
+                if (linksAdicProp && linksAdicProp !== '-' && linksAdicProp.startsWith('[')) {
+                  parsedLinks = JSON.parse(linksAdicProp);
+                }
               } catch(e) {}
 
               const sitLower = (getSituacao(item) || '').toLowerCase();
@@ -506,11 +508,14 @@ export default function App() {
                       
                       {parsedLinks.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t-[2px] border-black border-dashed">
-                          {parsedLinks.map((l, i) => (
-                            <a key={i} href={l.url} target="_blank" rel="noreferrer" className="text-[9px] font-black uppercase tracking-wider bg-[#2a2a2a] text-white border-[1px] border-black px-1.5 py-0.5 flex items-center gap-1 hover:bg-[#c41e3a] transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-                              {l.label}
-                            </a>
-                          ))}
+                          {parsedLinks.map((l, i) => {
+                            return (
+                              <a key={i} href={l.url} target="_blank" rel="noreferrer" className="text-[9px] font-black uppercase tracking-wider bg-[#2a2a2a] text-white border-[1px] border-black px-1.5 py-0.5 flex items-center gap-1 hover:bg-[#c41e3a] transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+                                {l.label}
+                              </a>
+                            );
+                          })}
                         </div>
                       )}
                     </div>

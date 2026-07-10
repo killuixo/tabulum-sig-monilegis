@@ -179,7 +179,6 @@ export default function App() {
         </div>
       </div>
 
-      {}
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col md:flex-row mb-6 border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white overflow-hidden">
           <button 
@@ -236,11 +235,10 @@ export default function App() {
           </div>
         )}
 
-        {}
+        {/* CARDS */}
         {!loading && !error && viewMode === 'card' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredData.map((item, index) => {
-              const colorClass = MONDRIAN_COLORS[index % MONDRIAN_COLORS.length];
               const numeroProp = getNumero(item) || 'S/N';
               const ementaProp = getEmenta(item);
               const ultimoMovimentoProp = getUltimoMovimento(item);
@@ -288,12 +286,12 @@ export default function App() {
 
               return (
                 <div key={index} className="bg-white border-[5px] border-black flex flex-col shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 hover:shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] transition-all duration-200">
-                  <div className={`border-b-[5px] border-black p-4 flex justify-between items-start ${colorClass}`}>
+                  <div className="border-b-[5px] border-black p-4 flex justify-between items-start bg-gray-100">
                     <div>
                       <span className="bg-black text-white px-2 py-1 text-xs font-black tracking-widest uppercase">
                         {getTipoProposicao(item)}
                       </span>
-                      <h3 className="text-3xl font-black mt-2 text-white drop-shadow-md">
+                      <h3 className="text-3xl font-black mt-2 text-black">
                         {numeroProp}
                       </h3>
                     </div>
@@ -398,11 +396,10 @@ export default function App() {
           </div>
         )}
 
-        {}
+        {/* LISTA */}
         {!loading && !error && viewMode === 'list' && (
           <div className="flex flex-col gap-4">
             {filteredData.map((item, index) => {
-              const colorClass = MONDRIAN_COLORS[index % MONDRIAN_COLORS.length];
               const numeroProp = getNumero(item) || 'S/N';
               const ementaProp = getEmenta(item);
               const ultimoMovimentoProp = getUltimoMovimento(item);
@@ -448,7 +445,7 @@ export default function App() {
 
               return (
                 <div key={index} className="bg-white border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col md:flex-row hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 overflow-hidden">
-                  <div className={`w-full md:w-4 min-h-[1rem] md:min-h-full border-b-[4px] md:border-b-0 md:border-r-[4px] border-black flex-shrink-0 ${colorClass}`}></div>
+                  <div className="w-full md:w-4 min-h-[1rem] md:min-h-full border-b-[4px] md:border-b-0 md:border-r-[4px] border-black flex-shrink-0 bg-gray-200"></div>
                   
                   <div className="p-4 flex-grow flex flex-col md:flex-row gap-6 items-start md:items-center">
                     <div className="flex flex-row md:flex-col gap-2 items-center md:items-start md:w-32 flex-shrink-0">
@@ -520,7 +517,6 @@ export default function App() {
           </div>
         )}
         
-        {}
         {!loading && !error && filteredData.length === 0 && (
           <div className="text-center p-12 border-[5px] border-black bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
             <h3 className="text-2xl font-black uppercase">Nenhum resultado nesta aba.</h3>

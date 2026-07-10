@@ -36,7 +36,6 @@ export default function App() {
   const getSetor = (item) => item['Setor Atual'] || item['Setor atual'] || item['setor'] || '';
   const getObservacoes = (item) => item['Observações'] || item['Observacoes'] || item['observacoes'] || '';
   const getLink = (item) => item['Link'] || item['link'] || '';
-  const getTipoProposicao = (item) => item['Tipo de Proposição'] || item['Tipo de Proposicao'] || (activeTab === 'processo' ? 'Processo' : 'Atividade');
   
   const getPedidoVista = (item) => {
       let v = item['Pedido de Vista'] || item['pedido de vista'] || item['Pedido de vista'] || '';
@@ -45,9 +44,6 @@ export default function App() {
   const getInformacaoRelatoria = (item) => {
       let r = item['Informação da Relatoria'] || item['Informacao da relatoria'] || item['Informacao da Relatoria'] || item['informacao_relatoria'] || '';
       return (r === '-') ? '' : r;
-  };
-  const getLinksAdicionais = (item) => {
-      return item['Links Adicionais'] || item['links_adicionais'] || item['Links adicionais'] || '';
   };
 
   const API_URL = (import.meta && import.meta.env && import.meta.env.VITE_GOOGLE_SCRIPT_URL) || "";
@@ -110,6 +106,7 @@ export default function App() {
   };
 
   useEffect(() => {
+    document.title = "MoniLegis - TABULUM";
     fetchData();
   }, []);
 
@@ -145,20 +142,20 @@ export default function App() {
     <div className="min-h-screen bg-[#f8f9fa] text-black font-sans p-4 md:p-8 selection:bg-[#ffdb58] selection:text-black">
       <div className="max-w-7xl mx-auto mb-8">
         <div className="border-[6px] border-black bg-white grid grid-cols-1 md:grid-cols-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-          <div className="md:col-span-3 p-6 md:p-10 border-b-[6px] md:border-b-0 md:border-r-[6px] border-black flex flex-row items-center gap-4 md:gap-6">
-            <img 
-              src="https://raw.githubusercontent.com/killuixo/tabulum-sig-monilegis/refs/heads/main/icon-192.png" 
-              alt="Ícone Tabulum" 
-              className="w-20 h-20 md:w-28 md:h-28 object-contain drop-shadow-md flex-shrink-0"
-            />
-            <div className="flex flex-col justify-center">
-              <h1 className="text-4xl md:text-6xl font-black uppercase tracking-tighter leading-none mb-1 md:mb-2">
+          <div className="md:col-span-3 p-6 md:p-10 border-b-[6px] md:border-b-0 md:border-r-[6px] border-black flex flex-col justify-center">
+            <div className="flex items-center gap-4 mb-2">
+              <img 
+                src="https://raw.githubusercontent.com/killuixo/tabulum-sig-monilegis/refs/heads/main/icon-192.png" 
+                alt="Ícone Tabulum" 
+                className="w-16 h-16 md:w-20 md:h-20 object-contain drop-shadow-md"
+              />
+              <h1 className="text-4xl md:text-6xl font-black uppercase tracking-tighter">
                 TABULUM
               </h1>
-              <p className="text-lg md:text-xl font-bold text-gray-700 leading-tight">
-                Monitor Legislativo
-              </p>
             </div>
+            <p className="text-lg md:text-xl font-bold text-gray-700">
+              Monitor Legislativo
+            </p>
           </div>
           <div className={`p-4 flex items-center justify-center ${MONDRIAN_COLORS[0]}`}>
             <svg 
@@ -235,10 +232,10 @@ export default function App() {
           </div>
         )}
 
-        {/* CARDS */}
         {!loading && !error && viewMode === 'card' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredData.map((item, index) => {
+              const colorClass = MONDRIAN_COLORS[index % MONDRIAN_COLORS.length];
               const numeroProp = getNumero(item) || 'S/N';
               const ementaProp = getEmenta(item);
               const ultimoMovimentoProp = getUltimoMovimento(item);
@@ -247,14 +244,6 @@ export default function App() {
               const vistaProp = getPedidoVista(item);
               const infoRelatoriaProp = getInformacaoRelatoria(item);
               
-              const linksAdicProp = getLinksAdicionais(item);
-              let parsedLinks = [];
-              try {
-                if (linksAdicProp && linksAdicProp !== '-' && linksAdicProp.startsWith('[')) {
-                  parsedLinks = JSON.parse(linksAdicProp);
-                }
-              } catch(e) {}
-
               const sitLower = (getSituacao(item) || '').toLowerCase();
 
               let boxColorClass = 'bg-[#ffdb58]/30 text-black border-black';
@@ -288,17 +277,17 @@ export default function App() {
 
               return (
                 <div key={index} className="bg-white border-[5px] border-black flex flex-col shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 hover:shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] transition-all duration-200">
-                  <div className="border-b-[5px] border-black p-4 flex justify-between items-start bg-[#2a2a2a]">
+                  <div className={`border-b-[5px] border-black p-4 flex justify-between items-start ${colorClass}`}>
                     <div>
-                      <span className="bg-[#2a2a2a] text-white border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] px-2 py-1 text-xs font-black tracking-widest uppercase">
-                        {getTipoProposicao(item)}
+                      <span className="bg-black text-white px-2 py-1 text-xs font-black tracking-widest uppercase">
+                        {activeTab === 'processo' ? 'Processo' : 'Atividade'}
                       </span>
-                      <h3 className="text-3xl font-black mt-3 text-white tracking-tight">
+                      <h3 className="text-3xl font-black mt-2 text-white drop-shadow-md">
                         {numeroProp}
                       </h3>
                     </div>
                     {linkProp && linkProp !== '-' && (
-                      <a href={linkProp} target="_blank" rel="noreferrer" className="bg-white p-2 border-2 border-black hover:bg-gray-200 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" title="Ver na ALESC">
+                      <a href={linkProp} target="_blank" rel="noreferrer" className="bg-white p-2 border-2 border-black hover:bg-gray-200 transition-colors" title="Ver na ALESC">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-black"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
                       </a>
                     )}
@@ -330,26 +319,26 @@ export default function App() {
                       </p>
                     </div>
                     
-                    <div className="flex justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[10px] font-bold text-gray-500 uppercase">Setor Atual</p>
-                        <p className="text-sm font-bold leading-snug">{getSetor(item) || '-'}</p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-xs font-bold text-gray-500 uppercase">Setor Atual</p>
+                        <p className="font-bold leading-snug truncate">{getSetor(item) || '-'}</p>
                       </div>
-                      <div className="flex-shrink-0 text-right">
-                        <p className="text-[10px] font-bold text-gray-500 uppercase">Verificado</p>
-                        <p className="text-sm font-bold text-gray-600">{formatarData(item['Data da Verificação'])}</p>
+                      <div>
+                        <p className="text-xs font-bold text-gray-500 uppercase">Data Verificação</p>
+                        <p className="font-bold">{formatarData(item['Data da Verificação'])}</p>
                       </div>
                     </div>
 
                     {activeTab === 'processo' && (
                       <div className="pt-4 border-t-[3px] border-black border-dashed flex justify-between items-center">
                         <div className="overflow-hidden">
-                          <p className="text-[10px] font-bold text-gray-500 uppercase">Relator(a)</p>
+                          <p className="text-xs font-bold text-gray-500 uppercase">Relator(a)</p>
                           <p className="font-black text-[15px] uppercase truncate" title={getRelator(item)}>{getRelator(item) || '-'}</p>
                         </div>
                         <div className="text-right flex-shrink-0 ml-2">
-                           <p className="text-[10px] font-bold text-gray-500 uppercase">Distribuição</p>
-                           <p className="text-sm font-bold text-gray-600">{formatarData(item['Data de Distribuição'])}</p>
+                           <p className="text-xs font-bold text-gray-500 uppercase">Distribuição</p>
+                           <p className="font-bold">{formatarData(item['Data de Distribuição'])}</p>
                         </div>
                       </div>
                     )}
@@ -360,7 +349,7 @@ export default function App() {
                           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Notas Internas
                         </p>
                         {editingId !== numeroProp && (
-                          <button onClick={() => { setEditingId(numeroProp); setEditValue(obsProp || ''); }} className="text-[10px] font-bold uppercase underline hover:text-[#008080] transition-colors">
+                          <button onClick={() => { setEditingId(numeroProp); setEditValue(obsProp || ''); }} className="text-xs font-bold uppercase underline hover:text-[#008080] transition-colors">
                             Editar
                           </button>
                         )}
@@ -379,19 +368,6 @@ export default function App() {
                           {obsProp || <span className="text-gray-400 italic font-normal">Nenhuma observação inserida.</span>}
                         </p>
                       )}
-                      
-                      {parsedLinks.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t-[3px] border-black border-dashed">
-                          {parsedLinks.map((l, i) => {
-                            return (
-                              <a key={i} href={l.url} target="_blank" rel="noreferrer" className="text-[10px] font-black uppercase tracking-wider bg-black text-white border-2 border-black px-2 py-1 flex items-center gap-1 hover:bg-[#c41e3a] transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
-                                {l.label}
-                              </a>
-                            );
-                          })}
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -400,10 +376,10 @@ export default function App() {
           </div>
         )}
 
-        {/* LISTA */}
         {!loading && !error && viewMode === 'list' && (
           <div className="flex flex-col gap-4">
             {filteredData.map((item, index) => {
+              const colorClass = MONDRIAN_COLORS[index % MONDRIAN_COLORS.length];
               const numeroProp = getNumero(item) || 'S/N';
               const ementaProp = getEmenta(item);
               const ultimoMovimentoProp = getUltimoMovimento(item);
@@ -411,14 +387,6 @@ export default function App() {
               const linkProp = getLink(item);
               const vistaProp = getPedidoVista(item);
               const infoRelatoriaProp = getInformacaoRelatoria(item);
-              
-              const linksAdicProp = getLinksAdicionais(item);
-              let parsedLinks = [];
-              try {
-                if (linksAdicProp && linksAdicProp !== '-' && linksAdicProp.startsWith('[')) {
-                  parsedLinks = JSON.parse(linksAdicProp);
-                }
-              } catch(e) {}
 
               const sitLower = (getSituacao(item) || '').toLowerCase();
 
@@ -451,18 +419,15 @@ export default function App() {
 
               return (
                 <div key={index} className="bg-white border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col md:flex-row hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 overflow-hidden">
-                  <div className="w-full md:w-4 min-h-[1rem] md:min-h-full border-b-[4px] md:border-b-0 md:border-r-[4px] border-black flex-shrink-0 bg-[#2a2a2a]"></div>
+                  <div className={`w-full md:w-4 min-h-[1rem] md:min-h-full border-b-[4px] md:border-b-0 md:border-r-[4px] border-black flex-shrink-0 ${colorClass}`}></div>
                   
                   <div className="p-4 flex-grow flex flex-col md:flex-row gap-6 items-start md:items-center">
                     <div className="flex flex-row md:flex-col gap-2 items-center md:items-start md:w-32 flex-shrink-0">
-                      <span className="bg-[#2a2a2a] text-white border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] px-2 py-1 text-[10px] font-black tracking-widest uppercase">
-                        {getTipoProposicao(item)}
-                      </span>
-                      <span className="text-sm font-black tracking-widest uppercase">
+                      <span className="bg-black text-white px-2 py-1 text-sm font-black tracking-widest uppercase">
                         {numeroProp}
                       </span>
                       {linkProp && linkProp !== '-' && (
-                        <a href={linkProp} target="_blank" rel="noreferrer" className="text-[10px] font-black uppercase underline hover:text-[#008080]">Ver na ALESC</a>
+                        <a href={linkProp} target="_blank" rel="noreferrer" className="text-xs font-black uppercase underline hover:text-[#008080]">Ver na ALESC</a>
                       )}
                     </div>
 
@@ -480,7 +445,7 @@ export default function App() {
                       <div className="md:col-span-3 flex flex-col justify-center">
                         <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Situação / Setor</p>
                         <p className="text-sm font-bold">{getSituacao(item) || '-'}</p>
-                        <p className="text-[10px] text-gray-600 font-bold line-clamp-2">{getSetor(item) || '-'}</p>
+                        <p className="text-xs text-gray-600 font-bold truncate">{getSetor(item) || '-'}</p>
                       </div>
                     </div>
 
@@ -504,19 +469,6 @@ export default function App() {
                         <p className="text-xs font-bold text-gray-700 line-clamp-3" title={obsProp}>
                           {obsProp || <span className="text-gray-400 italic font-normal">Nenhuma.</span>}
                         </p>
-                      )}
-                      
-                      {parsedLinks.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t-[2px] border-black border-dashed">
-                          {parsedLinks.map((l, i) => {
-                            return (
-                              <a key={i} href={l.url} target="_blank" rel="noreferrer" className="text-[9px] font-black uppercase tracking-wider bg-[#2a2a2a] text-white border-[1px] border-black px-1.5 py-0.5 flex items-center gap-1 hover:bg-[#c41e3a] transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
-                                {l.label}
-                              </a>
-                            );
-                          })}
-                        </div>
                       )}
                     </div>
                   </div>

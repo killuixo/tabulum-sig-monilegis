@@ -45,6 +45,9 @@ export default function App() {
       let r = item['Informação da Relatoria'] || item['Informacao da relatoria'] || item['Informacao da Relatoria'] || item['informacao_relatoria'] || '';
       return (r === '-') ? '' : r;
   };
+  const getLinksAdicionais = (item) => {
+      return item['Links Adicionais'] || item['links_adicionais'] || item['Links adicionais'] || '';
+  };
 
   const API_URL = (import.meta && import.meta.env && import.meta.env.VITE_GOOGLE_SCRIPT_URL) || "";
 
@@ -232,6 +235,7 @@ export default function App() {
           </div>
         )}
 
+        {/* MODO CARDS */}
         {!loading && !error && viewMode === 'card' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredData.map((item, index) => {
@@ -244,6 +248,13 @@ export default function App() {
               const vistaProp = getPedidoVista(item);
               const infoRelatoriaProp = getInformacaoRelatoria(item);
               
+              // Verifica se tem Links Adicionais de publicações
+              const linksAdicProp = getLinksAdicionais(item);
+              let parsedLinks = [];
+              try {
+                if (linksAdicProp && linksAdicProp !== '-') parsedLinks = JSON.parse(linksAdicProp);
+              } catch(e) {}
+
               const sitLower = (getSituacao(item) || '').toLowerCase();
 
               let boxColorClass = 'bg-[#ffdb58]/30 text-black border-black';
@@ -368,6 +379,18 @@ export default function App() {
                           {obsProp || <span className="text-gray-400 italic font-normal">Nenhuma observação inserida.</span>}
                         </p>
                       )}
+                      
+                      {/* BOTÕES DE LINKS EXTERNOS (LEI, REDAÇÃO, PUBLICAÇÃO) */}
+                      {parsedLinks.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t-[3px] border-black border-dashed">
+                          {parsedLinks.map((l, i) => (
+                            <a key={i} href={l.url} target="_blank" rel="noreferrer" className="text-[10px] font-black uppercase tracking-wider bg-black text-white border-2 border-black px-2 py-1 flex items-center gap-1 hover:bg-[#c41e3a] transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+                              {l.label}
+                            </a>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -376,6 +399,7 @@ export default function App() {
           </div>
         )}
 
+        {/* MODO LISTA */}
         {!loading && !error && viewMode === 'list' && (
           <div className="flex flex-col gap-4">
             {filteredData.map((item, index) => {
@@ -387,6 +411,12 @@ export default function App() {
               const linkProp = getLink(item);
               const vistaProp = getPedidoVista(item);
               const infoRelatoriaProp = getInformacaoRelatoria(item);
+              
+              const linksAdicProp = getLinksAdicionais(item);
+              let parsedLinks = [];
+              try {
+                if (linksAdicProp && linksAdicProp !== '-') parsedLinks = JSON.parse(linksAdicProp);
+              } catch(e) {}
 
               const sitLower = (getSituacao(item) || '').toLowerCase();
 
@@ -469,6 +499,16 @@ export default function App() {
                         <p className="text-xs font-bold text-gray-700 line-clamp-3" title={obsProp}>
                           {obsProp || <span className="text-gray-400 italic font-normal">Nenhuma.</span>}
                         </p>
+                      )}
+                      
+                      {parsedLinks.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t-[2px] border-black border-dashed">
+                          {parsedLinks.map((l, i) => (
+                            <a key={i} href={l.url} target="_blank" rel="noreferrer" className="text-[9px] font-black uppercase tracking-wider bg-black text-white border-[1px] border-black px-1.5 py-0.5 flex items-center gap-1 hover:bg-[#c41e3a] transition-colors">
+                              {l.label}
+                            </a>
+                          ))}
+                        </div>
                       )}
                     </div>
                   </div>

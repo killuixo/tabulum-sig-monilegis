@@ -50,7 +50,9 @@ export default function App() {
       return item['Links Adicionais'] || item['links_adicionais'] || item['Links adicionais'] || '';
   };
 
-  const API_URL = (import.meta && import.meta.env && import.meta.env.VITE_GOOGLE_SCRIPT_URL) || "";
+  // Cole a URL gerada no seu Google Apps Script diretamente dentro das aspas abaixo.
+  // Isso garante o funcionamento seguro e compatível com o ambiente.
+  const API_URL = "";
 
   const fetchData = async () => {
     setLoading(true);

@@ -50,10 +50,24 @@ export default function App() {
       return item['Links Adicionais'] || item['links_adicionais'] || item['Links adicionais'] || '';
   };
 
-  // Leitura da variável de ambiente para o Vercel (evitando conflitos de compatibilidade com alvos es2015)
-  const API_URL = (typeof process !== 'undefined' && process.env) 
-    ? (process.env.REACT_APP_API_URL || process.env.NEXT_PUBLIC_API_URL || process.env.VITE_API_URL) 
-    : "COLE_SUA_URL_DO_SCRIPT_AQUI";
+  // Restaura a leitura obrigatória para projetos Vite (Vercel) e Create React App
+  const API_URL = (() => {
+    try {
+      // Sintaxe estritamente necessária para o Vite injetar variáveis de ambiente
+      if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) {
+        return import.meta.env.VITE_API_URL;
+      }
+    } catch (e) {}
+    
+    try {
+      // Fallback para outros ambientes (Next.js, CRA)
+      if (typeof process !== 'undefined' && process.env) {
+        return process.env.VITE_API_URL || process.env.REACT_APP_API_URL || process.env.NEXT_PUBLIC_API_URL;
+      }
+    } catch (e) {}
+    
+    return "COLE_SUA_URL_DO_SCRIPT_AQUI";
+  })();
 
   const fetchData = async () => {
     setLoading(true);

@@ -50,16 +50,15 @@ export default function App() {
       return item['Links Adicionais'] || item['links_adicionais'] || item['Links adicionais'] || '';
   };
 
-  // Cole a URL gerada no seu Google Apps Script diretamente dentro das aspas abaixo.
-  // Isso garante o funcionamento seguro e compatível com o ambiente.
-  const API_URL = "";
+  // Se o Vercel não puxar, a URL colocada nas aspas atua como um Salva-vidas.
+  const API_URL = "COLE_SUA_URL_DO_SCRIPT_AQUI";
 
   const fetchData = async () => {
     setLoading(true);
     setError(null);
     try {
-      if (!API_URL) {
-        throw new Error("A variável VITE_GOOGLE_SCRIPT_URL não foi encontrada.");
+      if (!API_URL || API_URL === "COLE_SUA_URL_DO_SCRIPT_AQUI") {
+        throw new Error("A URL do Google Script não foi configurada. Se você usa o Vercel, lembre-se de ir na aba 'Deployments' e fazer um REDEPLOY após adicionar a variável. Ou, para resolver imediatamente, cole a URL entre as aspas na variável API_URL do arquivo App.jsx.");
       }
 
       const response = await fetch(API_URL);
@@ -69,7 +68,7 @@ export default function App() {
       setData(jsonData);
     } catch (err) {
       console.error(err);
-      setError('Não foi possível carregar os dados. Verifique a URL do Web App (API_URL). ' + err.message);
+      setError(err.message);
     } finally {
       setLoading(false);
     }

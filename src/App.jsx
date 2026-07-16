@@ -50,8 +50,10 @@ export default function App() {
       return item['Links Adicionais'] || item['links_adicionais'] || item['Links adicionais'] || '';
   };
 
-  // Se o Vercel não puxar, a URL colocada nas aspas atua como um Salva-vidas.
-  const API_URL = "COLE_SUA_URL_DO_SCRIPT_AQUI";
+  // Leitura da variável de ambiente para o Vercel (evitando conflitos de compatibilidade com alvos es2015)
+  const API_URL = (typeof process !== 'undefined' && process.env) 
+    ? (process.env.REACT_APP_API_URL || process.env.NEXT_PUBLIC_API_URL || process.env.VITE_API_URL) 
+    : "COLE_SUA_URL_DO_SCRIPT_AQUI";
 
   const fetchData = async () => {
     setLoading(true);

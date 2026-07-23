@@ -142,7 +142,7 @@ export default function App() {
     
     if (quickFilter === 'aprovados') {
        const sit = getSituacao(item).toLowerCase();
-       const isApproved = pLinks.some(l => l.label.toLowerCase().includes('lei') || l.label.toLowerCase().includes('promulgad')) || 
+       const isApproved = pLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad')) || 
                           sit.includes('lei') || sit.includes('norma jurídica');
        if (!isApproved) return false;
     }
@@ -265,7 +265,7 @@ export default function App() {
               try { if (linksAdicProp && linksAdicProp !== '-') parsedLinks = JSON.parse(linksAdicProp); } catch(e) {}
 
               // Lógica de Identificação de Links Especiais
-              let leiLink = parsedLinks.find(l => l.label.toLowerCase().includes('lei') || l.label.toLowerCase().includes('promulgad'));
+              let leiLink = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
               let diarioLink = parsedLinks.find(l => l.label.toLowerCase().includes('diário'));
               let vetoLink = parsedLinks.find(l => l.label.toLowerCase().includes('veto'));
               let redacaoLink = parsedLinks.find(l => l.label.toLowerCase().includes('redação'));
@@ -426,7 +426,7 @@ export default function App() {
               let parsedLinks = [];
               try { if (linksAdicProp && linksAdicProp !== '-') parsedLinks = JSON.parse(linksAdicProp); } catch(e) {}
 
-              let leiLink = parsedLinks.find(l => l.label.toLowerCase().includes('lei') || l.label.toLowerCase().includes('promulgad'));
+              let leiLink = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
               let diarioLink = parsedLinks.find(l => l.label.toLowerCase().includes('diário'));
               let vetoLink = parsedLinks.find(l => l.label.toLowerCase().includes('veto'));
               let redacaoLink = parsedLinks.find(l => l.label.toLowerCase().includes('redação'));
@@ -663,7 +663,7 @@ export default function App() {
                     let pLinks = [];
                     try { if (linksAdic && linksAdic !== '-') pLinks = JSON.parse(linksAdic); } catch(e) {}
                     
-                    let leiLink = pLinks.find(l => l.label.toLowerCase().includes('lei') || l.label.toLowerCase().includes('promulgad'));
+                    let leiLink = pLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
                     let diarioLink = pLinks.find(l => l.label.toLowerCase().includes('diário'));
                     let vetoLink = pLinks.find(l => l.label.toLowerCase().includes('veto'));
                     

@@ -44,7 +44,7 @@ export default function App() {
   };
 
   const formatarUltimoMovimento = (texto) => {
-    if (!texto) return '-';
+    if (!texto || texto === '-') return '-';
     return texto.replace(/^\d{2}\/\d{2}\/\d{4}\s*-\s*/, '');
   };
 
@@ -57,6 +57,8 @@ export default function App() {
   const getObservacoes = (item) => item['Observações'] || item['Observacoes'] || item['observacoes'] || '';
   const getLink = (item) => item['Link'] || item['link'] || '';
   const getTipoProposicao = (item) => item['Tipo de Proposição'] || item['Tipo de Proposicao'] || (activeTab === 'processo' ? 'Processo' : 'Atividade');
+  const getProcessosAnexos = (item) => item['Processos anexos'] || item['Processos Anexos'] || '';
+  
   const getPedidoVista = (item) => {
       let v = item['Pedido de Vista'] || item['pedido de vista'] || item['Pedido de vista'] || '';
       return (v === '-') ? '' : v;
@@ -69,20 +71,11 @@ export default function App() {
       return item['Links Adicionais'] || item['links_adicionais'] || item['Links adicionais'] || '';
   };
 
-  const getMacroSituacao = (item) => {
-    const s = getSituacao(item).toLowerCase();
-    const linksAdicProp = getLinksAdicionais(item);
-    let isAprovadaPorLink = false;
-    try {
-      if (linksAdicProp && linksAdicProp !== '-') {
-         const parsedLinks = JSON.parse(linksAdicProp);
-         isAprovadaPorLink = parsedLinks.some(l => l.label.toLowerCase().includes('transformado em lei') || l.label.toLowerCase().includes('promulgad'));
-      }
-    } catch(e) {}
-
-    if (isAprovadaPorLink || s.includes('transformado em lei') || s.includes('norma jurídica')) return 'Aprovados';
+  const getMacroSituacao = (situacao) => {
+    const s = situacao.toLowerCase();
+    if (s.includes('lei') || s.includes('norma jurídica')) return 'Aprovados';
     if (s.includes('veto') || s.includes('vetad')) return 'Vetados';
-    if (s.includes('arquivad') || s.includes('rejeitad') || s.includes('retirad') || s.includes('concluíd')) return 'Arquivados';
+    if (s.includes('arquivad') || s.includes('rejeitad') || s.includes('retirad') || s.includes('concluíd')) return 'Encerrados';
     return 'Em Tramitação';
   };
 
@@ -105,7 +98,7 @@ export default function App() {
     setError(null);
     try {
       if (!API_URL || API_URL === "COLE_SUA_URL_DO_SCRIPT_AQUI") {
-        throw new Error("A URL do Google Script não foi configurada. Atualize a variável de ambiente VITE_API_URL no Vercel.");
+        throw new Error("A URL do Google Script não foi configurada.");
       }
       const response = await fetch(API_URL);
       if (!response.ok) throw new Error('Falha ao aceder aos dados da API.');
@@ -134,13 +127,9 @@ export default function App() {
       });
       const result = await response.json();
       if (result.status === 'success') {
-        setData(prevData => 
-          prevData.map(item => 
-            getNumero(item) === numero ? { ...item, 'Observações': editValue } : item
-          )
-        );
-        if (selectedItem && getNumero(selectedItem) === numero) {
-           setSelectedItem({ ...selectedItem, 'Observações': editValue });
+        setData(prevData => prevData.map(item => getNumero(item) === numero ? { ...item, 'Observações': editValue } : item));
+        if(selectedItem && getNumero(selectedItem) === numero) {
+          setSelectedItem(prev => ({...prev, 'Observações': editValue}));
         }
         setEditingId(null);
         showToast("Observação guardada com sucesso!");
@@ -174,15 +163,15 @@ export default function App() {
       const emenLower = getEmenta(item).toLowerCase();
       
       const linksAdicProp = getLinksAdicionais(item);
-      let leiLink = null;
+      let isAprovadaPorLink = false;
       try {
         if (linksAdicProp && linksAdicProp !== '-') {
            const parsedLinks = JSON.parse(linksAdicProp);
-           leiLink = parsedLinks.find(l => l.label.toLowerCase().includes('transformado em lei') || l.label.toLowerCase().includes('promulgad'));
+           isAprovadaPorLink = parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
         }
       } catch(e) {}
       
-      const isAprovadoLei = leiLink || sitLower.includes('transformado em lei') || sitLower.includes('norma jurídica');
+      const isAprovadoLei = isAprovadaPorLink || sitLower.includes('lei') || sitLower.includes('norma jurídica');
 
       if (toggleAprovadas && !isAprovadoLei) return false;
       if (toggleUtilidade && !emenLower.includes('utilidade pública')) return false;
@@ -198,7 +187,11 @@ export default function App() {
                getRelator(item).toLowerCase().includes(term) || 
                sitLower.includes(term) || 
                emenLower.includes(term) ||
-               getPedidoVista(item).toLowerCase().includes(term);
+               getPedidoVista(item).toLowerCase().includes(term) ||
+               (item['Data de entrada'] || '').toLowerCase().includes(term) ||
+               getSetor(item).toLowerCase().includes(term) ||
+               (item['Data de Distribuição'] || '').toLowerCase().includes(term) ||
+               getTipoProposicao(item).toLowerCase().includes(term);
       }
       
       return true;
@@ -220,12 +213,12 @@ export default function App() {
 
     const stats = {
       total: filtered.length,
-      macro: { Aprovados: 0, Vetados: 0, 'Em Tramitação': 0, Arquivados: 0 },
+      macro: { Aprovados: 0, Vetados: 0, 'Em Tramitação': 0, Encerrados: 0 },
       tipos: {}
     };
 
     filtered.forEach(item => {
-      stats.macro[getMacroSituacao(item)]++;
+      stats.macro[getMacroSituacao(getSituacao(item))]++;
       const tipo = getTipoProposicao(item);
       stats.tipos[tipo] = (stats.tipos[tipo] || 0) + 1;
     });
@@ -310,7 +303,6 @@ export default function App() {
           </button>
         </div>
 
-        {/* ÁREA DE CONTROLES: BOTÕES + DASHBOARD */}
         <div className="flex flex-col lg:flex-row gap-6 mb-6">
           <div className="flex flex-col gap-3 lg:w-1/3">
             <button 
@@ -355,20 +347,19 @@ export default function App() {
               <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-gray-500">
                 <span title={`Aprovados: ${dashboardStats.macro.Aprovados}`}>APRO {dashboardStats.macro.Aprovados}</span>
                 <span title={`Em Tramitação: ${dashboardStats.macro['Em Tramitação']}`}>TRAM {dashboardStats.macro['Em Tramitação']}</span>
-                <span title={`Arquivados: ${dashboardStats.macro.Arquivados}`}>ARQU {dashboardStats.macro.Arquivados}</span>
+                <span title={`Encerrados: ${dashboardStats.macro.Encerrados}`}>ENCE {dashboardStats.macro.Encerrados}</span>
                 <span title={`Vetados: ${dashboardStats.macro.Vetados}`}>VETA {dashboardStats.macro.Vetados}</span>
               </div>
               <div className="w-full h-4 flex bg-gray-200 border-[2px] border-black overflow-hidden">
                 <div className="h-full bg-[#008080]" style={{width: `${(dashboardStats.macro.Aprovados / dashboardStats.total) * 100 || 0}%`}}></div>
                 <div className="h-full bg-[#ffdb58]" style={{width: `${(dashboardStats.macro['Em Tramitação'] / dashboardStats.total) * 100 || 0}%`}}></div>
-                <div className="h-full bg-gray-500" style={{width: `${(dashboardStats.macro.Arquivados / dashboardStats.total) * 100 || 0}%`}}></div>
+                <div className="h-full bg-gray-500" style={{width: `${(dashboardStats.macro.Encerrados / dashboardStats.total) * 100 || 0}%`}}></div>
                 <div className="h-full bg-[#c41e3a]" style={{width: `${(dashboardStats.macro.Vetados / dashboardStats.total) * 100 || 0}%`}}></div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* PAINEL DE FILTROS AVANÇADOS (MULTI-SELECT) */}
         {showFilters && (
           <div className="mb-6 p-6 border-[4px] border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
             <div className="flex justify-between items-center mb-4 border-b-[3px] border-black pb-2">
@@ -380,7 +371,6 @@ export default function App() {
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              {/* TIPO */}
               <div className="flex flex-col gap-2">
                 <p className="text-xs font-black uppercase text-gray-500 tracking-wider">Tipo</p>
                 <div className="max-h-40 overflow-y-auto pr-2 custom-scrollbar flex flex-col gap-1.5">
@@ -392,7 +382,6 @@ export default function App() {
                   ))}
                 </div>
               </div>
-              {/* SITUAÇÃO */}
               <div className="flex flex-col gap-2">
                 <p className="text-xs font-black uppercase text-gray-500 tracking-wider">Situação</p>
                 <div className="max-h-40 overflow-y-auto pr-2 custom-scrollbar flex flex-col gap-1.5">
@@ -404,7 +393,6 @@ export default function App() {
                   ))}
                 </div>
               </div>
-              {/* RELATOR */}
               <div className="flex flex-col gap-2">
                 <p className="text-xs font-black uppercase text-gray-500 tracking-wider">Relator(a)</p>
                 <div className="max-h-40 overflow-y-auto pr-2 custom-scrollbar flex flex-col gap-1.5">
@@ -416,7 +404,6 @@ export default function App() {
                   ))}
                 </div>
               </div>
-              {/* PEDIDO DE VISTA */}
               <div className="flex flex-col gap-2">
                 <p className="text-xs font-black uppercase text-gray-500 tracking-wider">Pedido de Vista</p>
                 <div className="max-h-40 overflow-y-auto pr-2 custom-scrollbar flex flex-col gap-1.5">
@@ -477,6 +464,7 @@ export default function App() {
             {filteredData.map((item, index) => {
               const numeroProp = getNumero(item) || 'S/N';
               const ementaProp = getEmenta(item);
+              const ultimoMovimentoProp = getUltimoMovimento(item);
               const obsProp = getObservacoes(item);
               const linkProp = getLink(item);
               const vistaProp = getPedidoVista(item);
@@ -489,17 +477,17 @@ export default function App() {
               } catch(e) {}
 
               const sitLower = (getSituacao(item) || '').toLowerCase();
-              let leiLink = parsedLinks.find(l => l.label.toLowerCase().includes('transformado em lei') || l.label.toLowerCase().includes('promulgad'));
+              let leiLink = parsedLinks.find(l => /\blei\b/i.test(l.label.toLowerCase()) || l.label.toLowerCase().includes('promulgad'));
               
-              const isAprovadoLei = leiLink || sitLower.includes('transformado em lei') || sitLower.includes('norma jurídica');
-              const isArquivado = sitLower.includes('arquivad') || sitLower.includes('veto') || sitLower.includes('retirado') || sitLower.includes('rejeitado') || isAprovadoLei;
+              const isAprovadoLei = leiLink || sitLower.includes('lei') || sitLower.includes('norma jurídica');
+              const isArquivado = sitLower.includes('arquivad') || sitLower.includes('veto') || sitLower.includes('retirado') || sitLower.includes('rejeitado') || sitLower.includes('concluíd') || isAprovadoLei;
 
               let boxColorClass = 'bg-[#ffdb58]/30 text-black border-black';
               let titleColorClass = 'text-black';
               let boxTitle = 'Último Movimento';
               let iconeCaixa = <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>;
               
-              let textoCaixa = formatarUltimoMovimento(getUltimoMovimento(item));
+              let textoCaixa = formatarUltimoMovimento(ultimoMovimentoProp);
 
               if (vistaProp) {
                 boxColorClass = 'bg-[#c41e3a] text-white border-black';
@@ -524,7 +512,7 @@ export default function App() {
               }
 
               return (
-                <div key={index} onClick={(e) => handleCardClick(e, item)} className="relative hover:-translate-y-1 transition-transform duration-200 cursor-pointer group flex flex-col h-full">
+                <div key={index} onClick={(e) => { if(!e.target.closest('a') && !e.target.closest('button') && !e.target.closest('textarea')) setSelectedItem(item); }} className="relative hover:-translate-y-1 transition-transform duration-200 cursor-pointer group flex flex-col h-full">
                   <div className={`absolute inset-0 top-[6px] left-[6px] right-[-6px] bottom-[-6px] transition-all duration-200 group-hover:top-[10px] group-hover:left-[10px] group-hover:right-[-10px] group-hover:bottom-[-10px] ${isAprovadoLei ? 'bg-gradient-to-br from-[#c41e3a] via-[#ffdb58] to-[#008080]' : 'bg-black'}`}></div>
                   
                   <div className="relative z-10 bg-white border-[5px] border-black flex flex-col flex-grow">
@@ -546,26 +534,26 @@ export default function App() {
 
                     <div className="p-5 flex-grow flex flex-col gap-4">
                       
-                      <div className={`border-[3px] p-3 ${boxColorClass}`}>
+                      <div className={`border-[3px] p-3 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] ${boxColorClass}`}>
                         <p className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1 mb-1 ${titleColorClass}`}>
                           {iconeCaixa}
                           {boxTitle}
                         </p>
-                        <p className={`text-sm font-bold leading-snug ${titleColorClass}`}>
+                        <p className={`text-[13px] font-bold leading-snug ${titleColorClass}`}>
                           {textoCaixa}
                         </p>
                       </div>
 
-                      <div className="bg-gray-50 border-[2px] border-black p-3">
+                      <div className="bg-gray-50 border-[2px] border-black p-3 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
                         <p className="text-[10px] font-black text-gray-800 uppercase tracking-wider mb-1">Ementa / Resumo</p>
-                        <p className="text-sm font-bold text-gray-800 leading-snug line-clamp-4">
+                        <p className="text-[13px] font-bold text-gray-800 leading-snug line-clamp-4">
                           {ementaProp || <span className="text-gray-400 italic font-normal">Ementa não informada.</span>}
                         </p>
                       </div>
 
                       <div>
-                        <p className="text-xs font-bold text-gray-500 uppercase">Situação Geral</p>
-                        <p className="text-lg font-black leading-tight border-l-[4px] border-black pl-3 mt-1 truncate">
+                        <p className="text-[10px] font-bold text-gray-500 uppercase">Situação Geral</p>
+                        <p className="text-[16px] font-black leading-tight border-l-[4px] border-black pl-3 mt-1 truncate">
                           {getSituacao(item) || '-'}
                         </p>
                       </div>
@@ -573,28 +561,28 @@ export default function App() {
                       <div className="flex justify-between gap-4">
                         <div className="flex-1 min-w-0">
                           <p className="text-[10px] font-bold text-gray-500 uppercase">Setor Atual</p>
-                          <p className="text-sm font-bold leading-snug truncate">{getSetor(item) || '-'}</p>
+                          <p className="text-[13px] font-bold leading-snug truncate">{getSetor(item) || '-'}</p>
                         </div>
                         <div className="flex-shrink-0 text-right">
                           <p className="text-[10px] font-bold text-gray-500 uppercase">Verificado</p>
-                          <p className="text-sm font-bold text-gray-600">{formatarData(item['Data da Verificação'])}</p>
+                          <p className="text-[13px] font-bold text-gray-600">{formatarData(item['Data da Verificação'])}</p>
                         </div>
                       </div>
 
                       {activeTab === 'processo' && !isArquivado && (
-                        <div className="pt-4 border-t-[3px] border-black border-dashed flex flex-col gap-2">
+                        <div className="pt-4 border-t-[3px] border-black border-dashed flex flex-col gap-1">
                           <div className="flex justify-between items-center">
                             <div className="overflow-hidden">
                               <p className="text-[10px] font-bold text-gray-500 uppercase">Relator(a)</p>
-                              <p className="font-black text-[15px] uppercase truncate" title={getRelator(item)}>{getRelator(item) || '-'}</p>
+                              <p className="font-black text-[13px] uppercase truncate" title={getRelator(item)}>{getRelator(item) || '-'}</p>
                             </div>
                             <div className="text-right flex-shrink-0 ml-2">
                               <p className="text-[10px] font-bold text-gray-500 uppercase">Distribuição</p>
-                              <p className="text-sm font-bold text-gray-600">{formatarData(item['Data de Distribuição'])}</p>
+                              <p className="text-[13px] font-bold text-gray-600">{formatarData(item['Data de Distribuição'])}</p>
                             </div>
                           </div>
                           {infoRelatoriaProp && (
-                            <p className="text-[11px] font-bold text-[#008080] leading-tight italic">
+                            <p className="text-[10px] font-bold text-[#008080] italic leading-tight mt-1">
                               {infoRelatoriaProp}
                             </p>
                           )}
@@ -615,18 +603,18 @@ export default function App() {
                         
                         {editingId === numeroProp ? (
                           <div className="flex flex-col gap-2" onClick={e => e.stopPropagation()}>
-                            <textarea className="w-full border-2 border-black p-2 text-sm font-bold resize-none outline-none focus:border-[#008080]" rows="3" value={editValue} onChange={(e) => setEditValue(e.target.value)} placeholder="Escreva uma anotação aqui..."/>
+                            <textarea className="w-full border-2 border-black p-2 text-[13px] font-bold resize-none outline-none focus:border-[#008080]" rows="3" value={editValue} onChange={(e) => setEditValue(e.target.value)} placeholder="Escreva uma anotação aqui..."/>
                             <div className="flex gap-2 justify-end">
                               <button onClick={() => setEditingId(null)} className="px-3 py-1 bg-white border-2 border-black text-xs font-bold uppercase hover:bg-gray-200 transition-colors" disabled={isSaving}>Cancelar</button>
-                              <button onClick={() => handleSaveObservacao(numeroProp)} className={`px-3 py-1 border-2 border-black text-xs font-black uppercase text-white ${MONDRIAN_COLORS[1]} hover:opacity-90 flex items-center gap-2 transition-opacity`} disabled={isSaving}>{isSaving ? 'A guardar...' : 'Guardar'}</button>
+                              <button onClick={() => handleSaveObservacao(numeroProp)} className={`px-3 py-1 border-2 border-black text-xs font-black uppercase text-white ${MONDRIAN_COLORS[1]} hover:opacity-90 flex items-center gap-2 transition-opacity`} disabled={isSaving}>{isSaving ? '...' : 'Guardar'}</button>
                             </div>
                           </div>
                         ) : (
-                          <p className="text-sm font-bold text-gray-700 min-h-[2rem] whitespace-pre-wrap line-clamp-2">
+                          <p className="text-[13px] font-bold text-gray-700 min-h-[2rem] whitespace-pre-wrap line-clamp-2">
                             {obsProp || <span className="text-gray-400 italic font-normal">Nenhuma observação inserida.</span>}
                           </p>
                         )}
-                        
+
                         {parsedLinks.length > 0 && (
                           <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t-[3px] border-black border-dashed">
                             {(() => {
@@ -653,11 +641,13 @@ export default function App() {
           </div>
         )}
 
+        {}
         {!loading && !error && viewMode === 'list' && (
           <div className="flex flex-col gap-4">
             {filteredData.map((item, index) => {
               const numeroProp = getNumero(item) || 'S/N';
               const ementaProp = getEmenta(item);
+              const ultimoMovimentoProp = getUltimoMovimento(item);
               const obsProp = getObservacoes(item);
               const linkProp = getLink(item);
               const vistaProp = getPedidoVista(item);
@@ -670,15 +660,15 @@ export default function App() {
               } catch(e) {}
 
               const sitLower = (getSituacao(item) || '').toLowerCase();
-              let leiLink = parsedLinks.find(l => l.label.toLowerCase().includes('transformado em lei') || l.label.toLowerCase().includes('promulgad'));
+              let leiLink = parsedLinks.find(l => /\blei\b/i.test(l.label.toLowerCase()) || l.label.toLowerCase().includes('promulgad'));
 
-              const isAprovadoLei = leiLink || sitLower.includes('transformado em lei') || sitLower.includes('norma jurídica');
-              const isArquivado = sitLower.includes('arquivad') || sitLower.includes('veto') || sitLower.includes('retirado') || sitLower.includes('rejeitado') || isAprovadoLei;
+              const isAprovadoLei = leiLink || sitLower.includes('lei') || sitLower.includes('norma jurídica');
+              const isArquivado = sitLower.includes('arquivad') || sitLower.includes('veto') || sitLower.includes('retirado') || sitLower.includes('rejeitado') || sitLower.includes('concluíd') || isAprovadoLei;
 
               let boxColorClass = 'bg-white text-black';
               let titleColorClass = 'text-black';
               let boxTitle = 'Último Movimento';
-              let textoCaixa = formatarUltimoMovimento(getUltimoMovimento(item));
+              let textoCaixa = formatarUltimoMovimento(ultimoMovimentoProp);
 
               if (vistaProp) {
                 boxColorClass = 'bg-[#c41e3a] text-white';
@@ -703,7 +693,7 @@ export default function App() {
               }
 
               return (
-                <div key={index} onClick={(e) => handleCardClick(e, item)} className="relative hover:-translate-y-1 transition-transform duration-200 cursor-pointer group flex flex-col md:flex-row h-full">
+                <div key={index} onClick={(e) => { if(!e.target.closest('a') && !e.target.closest('button') && !e.target.closest('textarea')) setSelectedItem(item); }} className="relative hover:-translate-y-1 transition-transform duration-200 cursor-pointer group flex flex-col md:flex-row h-full">
                   <div className={`absolute inset-0 top-[4px] left-[4px] right-[-4px] bottom-[-4px] transition-all duration-200 group-hover:top-[6px] group-hover:left-[6px] group-hover:right-[-6px] group-hover:bottom-[-6px] ${isAprovadoLei ? 'bg-gradient-to-br from-[#c41e3a] via-[#ffdb58] to-[#008080]' : 'bg-black'}`}></div>
 
                   <div className="relative z-10 bg-white border-[4px] border-black flex flex-col md:flex-row flex-grow overflow-hidden">
@@ -726,16 +716,16 @@ export default function App() {
                         <div className="md:col-span-4">
                           <div className={`p-2 border-[2px] border-black ${boxColorClass} h-full flex flex-col justify-center`}>
                             <p className={`text-[10px] font-black uppercase tracking-wider mb-1 ${titleColorClass}`}>{boxTitle}</p>
-                            <p className={`text-sm font-bold line-clamp-3 ${titleColorClass}`} title={textoCaixa}>{textoCaixa}</p>
+                            <p className={`text-[13px] font-bold line-clamp-3 ${titleColorClass}`} title={textoCaixa}>{textoCaixa}</p>
                           </div>
                         </div>
                         <div className="md:col-span-5 flex flex-col justify-center">
                           <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Ementa</p>
-                          <p className="text-sm font-bold text-gray-800 line-clamp-3" title={ementaProp}>{ementaProp || '-'}</p>
+                          <p className="text-[13px] font-bold text-gray-800 line-clamp-3" title={ementaProp}>{ementaProp || '-'}</p>
                         </div>
                         <div className="md:col-span-3 flex flex-col justify-center">
                           <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Situação / Setor</p>
-                          <p className="text-sm font-bold">{getSituacao(item) || '-'}</p>
+                          <p className="text-[13px] font-bold">{getSituacao(item) || '-'}</p>
                           <p className="text-[10px] text-gray-600 font-bold line-clamp-2">{getSetor(item) || '-'}</p>
                         </div>
                       </div>
@@ -750,18 +740,18 @@ export default function App() {
                         
                         {editingId === numeroProp ? (
                           <div className="flex flex-col gap-2" onClick={e => e.stopPropagation()}>
-                            <textarea className="w-full border-2 border-black p-1 text-xs font-bold resize-none outline-none focus:border-[#008080]" rows="2" value={editValue} onChange={(e) => setEditValue(e.target.value)} placeholder="Anotação..."/>
+                            <textarea className="w-full border-2 border-black p-1 text-[13px] font-bold resize-none outline-none focus:border-[#008080]" rows="2" value={editValue} onChange={(e) => setEditValue(e.target.value)} placeholder="Anotação..."/>
                             <div className="flex gap-1 justify-end">
                               <button onClick={() => setEditingId(null)} className="px-2 py-1 bg-white border-2 border-black text-[10px] font-bold uppercase hover:bg-gray-200 transition-colors" disabled={isSaving}>X</button>
                               <button onClick={() => handleSaveObservacao(numeroProp)} className={`px-2 py-1 border-2 border-black text-[10px] font-black uppercase text-white ${MONDRIAN_COLORS[1]} hover:opacity-90 transition-opacity`} disabled={isSaving}>{isSaving ? '...' : 'OK'}</button>
                             </div>
                           </div>
                         ) : (
-                          <p className="text-xs font-bold text-gray-700 line-clamp-3" title={obsProp}>
+                          <p className="text-[13px] font-bold text-gray-700 line-clamp-3" title={obsProp}>
                             {obsProp || <span className="text-gray-400 italic font-normal">Nenhuma.</span>}
                           </p>
                         )}
-                        
+
                         {parsedLinks.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t-[2px] border-black border-dashed">
                             {(() => {
@@ -795,6 +785,7 @@ export default function App() {
           </div>
         )}
 
+        {}
         {selectedItem && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setSelectedItem(null)}>
             <div className="bg-white border-[6px] border-black shadow-[12px_12px_0px_0px_rgba(255,219,88,1)] w-full max-w-4xl max-h-[90vh] flex flex-col relative" onClick={e => e.stopPropagation()}>
@@ -834,7 +825,7 @@ export default function App() {
 
                 <div className="border-[3px] border-black p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
                   <p className="text-xs font-black text-gray-500 uppercase tracking-wider mb-2">Ementa / Resumo</p>
-                  <p className="text-base font-bold text-gray-800 leading-relaxed whitespace-pre-wrap">
+                  <p className="text-[15px] font-bold text-gray-800 leading-relaxed whitespace-pre-wrap">
                     {getEmenta(selectedItem) || '-'}
                   </p>
                 </div>
@@ -847,7 +838,7 @@ export default function App() {
                     </div>
                     <div className="border-[3px] border-black p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-center">
                       <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Setor Atual</p>
-                      <p className="text-base font-black leading-tight">{getSetor(selectedItem) || '-'}</p>
+                      <p className="text-[15px] font-black leading-tight">{getSetor(selectedItem) || '-'}</p>
                       <p className="text-[10px] font-bold text-gray-500 uppercase mt-2">Verificado: {formatarData(selectedItem['Data da Verificação'])}</p>
                     </div>
                   </div>
@@ -858,16 +849,16 @@ export default function App() {
                       const linksAdicProp = getLinksAdicionais(selectedItem);
                       let parsedLinks = [];
                       try { if (linksAdicProp && linksAdicProp !== '-') parsedLinks = JSON.parse(linksAdicProp); } catch(e) {}
-                      let leiLinkModal = parsedLinks.find(l => l.label.toLowerCase().includes('transformado em lei') || l.label.toLowerCase().includes('promulgad'));
+                      let leiLinkModal = parsedLinks.find(l => /\blei\b/i.test(l.label.toLowerCase()) || l.label.toLowerCase().includes('promulgad'));
 
-                      const isArquivadoModal = sitLowerModal.includes('arquivad') || sitLowerModal.includes('veto') || sitLowerModal.includes('transformado em lei') || sitLowerModal.includes('norma jurídica') || sitLowerModal.includes('retirado') || sitLowerModal.includes('rejeitado') || leiLinkModal;
+                      const isArquivadoModal = sitLowerModal.includes('arquivad') || sitLowerModal.includes('veto') || sitLowerModal.includes('lei') || sitLowerModal.includes('norma jurídica') || sitLowerModal.includes('retirado') || sitLowerModal.includes('rejeitado') || leiLinkModal;
                       
                       return !isArquivadoModal ? (
                         <>
                           <div className="flex justify-between items-start border-b-[2px] border-gray-200 pb-3">
                             <div>
                               <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Relator(a) Atual</p>
-                              <p className="text-base font-black uppercase">{getRelator(selectedItem) || '-'}</p>
+                              <p className="text-[15px] font-black uppercase">{getRelator(selectedItem) || '-'}</p>
                               {getInformacaoRelatoria(selectedItem) && (
                                 <p className="text-sm font-bold text-[#008080] leading-tight italic mt-1">
                                   {getInformacaoRelatoria(selectedItem)}
@@ -881,7 +872,7 @@ export default function App() {
                           </div>
                           <div className="border-b-[2px] border-gray-200 pb-3">
                             <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Pedido de Vista em Aberto</p>
-                            <p className="text-base font-black uppercase">{getPedidoVista(selectedItem) || 'Nenhum'}</p>
+                            <p className="text-[15px] font-black uppercase">{getPedidoVista(selectedItem) || 'Nenhum'}</p>
                           </div>
                         </>
                       ) : null;
@@ -889,7 +880,7 @@ export default function App() {
 
                     <div>
                       <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Processos Anexos</p>
-                      <p className="text-base font-black text-[#008080]">{selectedItem['Processos anexos'] || 'Nenhum'}</p>
+                      <p className="text-[15px] font-black text-[#008080]">{selectedItem['Processos anexos'] || 'Nenhum'}</p>
                     </div>
                   </div>
                 </div>
@@ -913,7 +904,7 @@ export default function App() {
                       </div>
                     </div>
                   ) : (
-                    <p className="text-base font-bold text-gray-700 min-h-[3rem] whitespace-pre-wrap">
+                    <p className="text-[15px] font-bold text-gray-700 min-h-[3rem] whitespace-pre-wrap">
                       {getObservacoes(selectedItem) || <span className="text-gray-400 italic font-normal">Nenhuma observação inserida na planilha.</span>}
                     </p>
                   )}
@@ -927,7 +918,7 @@ export default function App() {
                   } catch(e) {}
                   
                   if (parsedLinks.length > 0) {
-                    let leiLink = parsedLinks.find(l => l.label.toLowerCase().includes('transformado em lei') || l.label.toLowerCase().includes('promulgad'));
+                    let leiLink = parsedLinks.find(l => /\blei\b/i.test(l.label.toLowerCase()) || l.label.toLowerCase().includes('promulgad'));
                     let diarioL = parsedLinks.find(l => l.label.toLowerCase().includes('diário'));
                     let vetoL = parsedLinks.find(l => l.label.toLowerCase().includes('veto'));
                     let redacaoL = parsedLinks.find(l => l.label.toLowerCase().includes('redação'));

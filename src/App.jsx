@@ -71,21 +71,22 @@ export default function App() {
       return item['Links Adicionais'] || item['links_adicionais'] || item['Links adicionais'] || '';
   };
 
-  const getMacroSituacao = (situacao, linksAdicionais, ultimoMovimento) => {
+  const getMacroSituacao = (situacao, linksAdicionais, ultimoMovimento, observacoes) => {
     const s = (situacao || '').toLowerCase();
     const u = (ultimoMovimento || '').toLowerCase();
+    const o = (observacoes || '').toLowerCase();
     let hasVeto = false;
     let hasLei = false;
     try {
         if (linksAdicionais && linksAdicionais !== '-') {
             const parsed = JSON.parse(linksAdicionais);
-            hasVeto = parsed.some(l => l.label.toLowerCase().includes('veto'));
+            hasVeto = parsed.some(l => l.label.toLowerCase().includes('veto') || l.url.includes('doe.sea.sc.gov.br'));
             hasLei = parsed.some(l => l.label.toLowerCase().includes('lei') || l.label.toLowerCase().includes('promulgad'));
         }
     } catch(e){}
 
     if (hasLei || s.includes('lei') || s.includes('norma jurídica')) return 'Aprovados';
-    if (hasVeto || s.includes('veto') || s.includes('vetad') || u.includes('veto total') || u.includes('veto parcial')) return 'Vetados';
+    if (hasVeto || s.includes('veto') || s.includes('vetad') || u.includes('veto total') || u.includes('veto parcial') || o.includes('veto')) return 'Vetados';
     if (s.includes('arquivad') || s.includes('rejeitad') || s.includes('retirad') || s.includes('concluíd')) return 'Encerrados';
     return 'Em Tramitação';
   };
@@ -230,7 +231,7 @@ export default function App() {
     };
 
     filtered.forEach(item => {
-      stats.macro[getMacroSituacao(getSituacao(item), getLinksAdicionais(item), getUltimoMovimento(item))]++;
+      stats.macro[getMacroSituacao(getSituacao(item), getLinksAdicionais(item), getUltimoMovimento(item), getObservacoes(item))]++;
       const tipo = getTipoProposicao(item);
       stats.tipos[tipo] = (stats.tipos[tipo] || 0) + 1;
     });
@@ -487,10 +488,10 @@ export default function App() {
 
               const sitLower = (getSituacao(item) || '').toLowerCase();
               let leiLink = parsedLinks.find(l => /\blei\b/i.test(l.label.toLowerCase()) || l.label.toLowerCase().includes('promulgad'));
-              let vetoLink = parsedLinks.find(l => l.label.toLowerCase().includes('veto'));
+              let vetoLink = parsedLinks.find(l => l.label.toLowerCase().includes('veto') || l.url.includes('doe.sea.sc.gov.br'));
               
               const isAprovadoLei = leiLink || sitLower.includes('lei') || sitLower.includes('norma jurídica');
-              const isVeto = vetoLink || sitLower.includes('veto');
+              const isVeto = vetoLink || sitLower.includes('veto') || (getUltimoMovimento(item) || '').toLowerCase().includes('veto') || (getObservacoes(item) || '').toLowerCase().includes('veto');
               const isArquivado = sitLower.includes('arquivad') || sitLower.includes('retirado') || sitLower.includes('rejeitado') || sitLower.includes('concluíd') || isAprovadoLei;
 
               let boxColorClass = 'bg-[#ffdb58]/30 text-black border-black';
@@ -672,10 +673,10 @@ export default function App() {
 
               const sitLower = (getSituacao(item) || '').toLowerCase();
               let leiLink = parsedLinks.find(l => /\blei\b/i.test(l.label.toLowerCase()) || l.label.toLowerCase().includes('promulgad'));
-              let vetoLink = parsedLinks.find(l => l.label.toLowerCase().includes('veto'));
+              let vetoLink = parsedLinks.find(l => l.label.toLowerCase().includes('veto') || l.url.includes('doe.sea.sc.gov.br'));
 
               const isAprovadoLei = leiLink || sitLower.includes('lei') || sitLower.includes('norma jurídica');
-              const isVeto = vetoLink || sitLower.includes('veto');
+              const isVeto = vetoLink || sitLower.includes('veto') || (getUltimoMovimento(item) || '').toLowerCase().includes('veto') || (getObservacoes(item) || '').toLowerCase().includes('veto');
               const isArquivado = sitLower.includes('arquivad') || sitLower.includes('retirado') || sitLower.includes('rejeitado') || sitLower.includes('concluíd') || isAprovadoLei;
 
               let boxColorClass = 'bg-white text-black';
@@ -830,8 +831,8 @@ export default function App() {
                   const linksAdicProp = getLinksAdicionais(selectedItem);
                   let parsedLinks = [];
                   try { if (linksAdicProp && linksAdicProp !== '-') parsedLinks = JSON.parse(linksAdicProp); } catch(e) {}
-                  let vetoLinkModal = parsedLinks.find(l => l.label.toLowerCase().includes('veto'));
-                  const isVetoModal = vetoLinkModal || sitLowerModal.includes('veto');
+                  let vetoLinkModal = parsedLinks.find(l => l.label.toLowerCase().includes('veto') || l.url.includes('doe.sea.sc.gov.br'));
+                  const isVetoModal = vetoLinkModal || sitLowerModal.includes('veto') || (getUltimoMovimento(selectedItem) || '').toLowerCase().includes('veto') || (getObservacoes(selectedItem) || '').toLowerCase().includes('veto');
 
                   if (isVetoModal) {
                     return (
@@ -956,7 +957,7 @@ export default function App() {
                   
                   if (parsedLinks.length > 0) {
                     let leiLink = parsedLinks.find(l => /\blei\b/i.test(l.label.toLowerCase()) || l.label.toLowerCase().includes('promulgad'));
-                    let vetoLink = parsedLinks.find(l => l.label.toLowerCase().includes('veto'));
+                    let vetoLink = parsedLinks.find(l => l.label.toLowerCase().includes('veto') || l.url.includes('doe.sea.sc.gov.br'));
 
                     return (
                       <div className="pt-4 border-t-[3px] border-black border-dashed flex flex-wrap gap-3">

@@ -17,12 +17,10 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  // Estados de Busca e Visão
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState('card'); 
   const [activeTab, setActiveTab] = useState('processo'); 
   
-  // Estados dos Filtros Avançados e Rápidos
   const [showFilters, setShowFilters] = useState(false);
   const [toggleAprovadas, setToggleAprovadas] = useState(false);
   const [toggleUtilidade, setToggleUtilidade] = useState(false);
@@ -31,10 +29,9 @@ export default function App() {
     situacao: [],
     relator: [],
     vista: [],
-    macro: [] // Novo filtro de clique do Dashboard
+    macro: [] 
   });
 
-  // Estados de Interação
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -147,6 +144,14 @@ export default function App() {
     fetchData();
   }, []);
 
+  const goToFrontPage = () => {
+     setActiveTab('processo');
+     limparFiltrosAvançados();
+     setSearchTerm('');
+     setToggleAprovadas(false);
+     setToggleUtilidade(false);
+  };
+
   const { filteredData, dashboardStats, filterOptions, pieData } = useMemo(() => {
     let filtered = data.filter(item => {
       const num = getNumero(item).toUpperCase();
@@ -183,7 +188,6 @@ export default function App() {
          if ((temPalavraLei || temLinkLei) && !isVeto) isAprovadoLei = true;
       }
 
-      // Aplicação das métricas Macros exatas por Aba para filtro de clique
       let macroStatus = '';
       if (activeTab === 'processo') {
         if (isAprovadoLei) macroStatus = 'Aprovados';
@@ -197,10 +201,8 @@ export default function App() {
         else macroStatus = 'Em Tramitação';
       }
 
-      // Verifica os Filtros de Clique (Dashboard)
       if (filters.macro.length > 0 && !filters.macro.includes(macroStatus)) return false;
 
-      // Restantes Filtros Laterais
       if (toggleAprovadas && !isAprovadoLei) return false;
       if (toggleUtilidade && !emenLower.includes('utilidade pública')) return false;
 
@@ -329,7 +331,6 @@ export default function App() {
     setFilters({ tipo: [], situacao: [], relator: [], vista: [], macro: [] });
   };
 
-  // Configuração Dinâmica da Barra de Totais dependendo da Aba
   const barConfig = activeTab === 'processo' ? [
     { key: 'Aprovados', label: 'APRO', color: 'bg-[#008080]' },
     { key: 'Em Tramitação', label: 'TRAM', color: 'bg-[#ffdb58]' },
@@ -342,53 +343,53 @@ export default function App() {
     { key: 'Em Tramitação', label: 'OUTR', color: 'bg-black' }
   ];
 
+  const monitorLegislativoChars = "MONITOR LEGISLATIVO".split('');
+
   return (
     <div className="min-h-screen bg-[#f8f9fa] text-black font-sans p-4 md:p-8 selection:bg-[#ffdb58] selection:text-black">
+      
+      {}
       <div className="max-w-7xl mx-auto mb-8">
         <div className="border-[6px] border-black bg-white grid grid-cols-1 md:grid-cols-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-          <div className="md:col-span-3 p-6 md:p-10 border-b-[6px] md:border-b-0 md:border-r-[6px] border-black flex flex-row items-center gap-4 md:gap-6">
-            <img 
-              src="https://raw.githubusercontent.com/killuixo/tabulum-sig-monilegis/refs/heads/main/icon-192.png" 
-              alt="Ícone Tabulum" 
-              className="w-20 h-20 md:w-28 md:h-28 object-contain drop-shadow-md flex-shrink-0"
-            />
-            <div className="flex flex-col justify-center">
-              <h1 className="text-4xl md:text-6xl font-black uppercase tracking-tighter leading-none mb-1 md:mb-2">
-                TABULUM
-              </h1>
-              <p className="text-lg md:text-xl font-bold text-gray-700 leading-tight">
-                Monitor Legislativo
-              </p>
+          <div className="md:col-span-3 p-6 md:p-10 border-b-[6px] md:border-b-0 md:border-r-[6px] border-black flex flex-row items-center gap-4 md:gap-8">
+            <div onClick={goToFrontPage} className="flex flex-row items-center gap-4 md:gap-8 cursor-pointer group">
+              <img 
+                src="https://raw.githubusercontent.com/killuixo/tabulum-sig-monilegis/refs/heads/main/icon-192.png" 
+                alt="Ícone Tabulum" 
+                className="w-24 h-24 md:w-32 md:h-32 object-contain drop-shadow-md flex-shrink-0 group-hover:scale-105 transition-transform duration-300"
+              />
+              <div className="flex flex-col justify-center">
+                <h1 className="text-5xl md:text-7xl font-black uppercase tracking-tighter leading-none mb-0.5">
+                  TABULUM
+                </h1>
+                <div className="flex justify-between w-full text-gray-700 font-black uppercase text-[10px] md:text-[14.5px]">
+                  {monitorLegislativoChars.map((char, i) => (
+                    <span key={i}>{char === ' ' ? '\u00A0' : char}</span>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
-          <div className={`p-4 flex items-center justify-center ${MONDRIAN_COLORS[0]}`}>
-            <button onClick={fetchData} className="group outline-none">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`w-12 h-12 text-white group-hover:rotate-180 transition-transform duration-500 ${loading ? 'animate-spin' : ''}`}>
-                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>
-              </svg>
+          <div className="flex flex-col md:col-span-1 bg-white">
+            <button 
+               onClick={(e) => { e.stopPropagation(); setActiveTab('processo'); limparFiltrosAvançados(); setSearchTerm('');}}
+               className={`flex-1 p-4 font-black uppercase text-sm md:text-base border-b-[6px] border-black transition-colors flex items-center justify-center gap-3 ${activeTab === 'processo' ? MONDRIAN_COLORS[0] + ' text-white' : 'hover:bg-gray-100 text-gray-400'}`}
+            >
+               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+               Processo Legislativo
+            </button>
+            <button 
+               onClick={(e) => { e.stopPropagation(); setActiveTab('atividade'); limparFiltrosAvançados(); setSearchTerm('');}}
+               className={`flex-1 p-4 font-black uppercase text-sm md:text-base transition-colors flex items-center justify-center gap-3 ${activeTab === 'atividade' ? MONDRIAN_COLORS[1] + ' text-white' : 'hover:bg-gray-100 text-gray-400'}`}
+            >
+               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+               Atividade Parlamentar
             </button>
           </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col md:flex-row mb-6 border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white overflow-hidden">
-          <button 
-             onClick={() => {setActiveTab('processo'); limparFiltrosAvançados(); setSearchTerm('');}}
-             className={`flex-1 p-4 font-black uppercase text-lg md:border-r-[4px] border-black transition-colors flex items-center justify-center gap-3 ${activeTab === 'processo' ? MONDRIAN_COLORS[0] + ' text-white' : 'hover:bg-gray-100 text-gray-400'}`}
-          >
-             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-             Processo Legislativo
-          </button>
-          <button 
-             onClick={() => {setActiveTab('atividade'); limparFiltrosAvançados(); setSearchTerm('');}}
-             className={`flex-1 p-4 font-black uppercase text-lg transition-colors flex items-center justify-center gap-3 ${activeTab === 'atividade' ? MONDRIAN_COLORS[1] + ' text-white' : 'hover:bg-gray-100 text-gray-400'}`}
-          >
-             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
-             Atividade Parlamentar
-          </button>
-        </div>
-
         <div className="flex flex-col lg:flex-row gap-6 mb-6">
           <div className="flex flex-col gap-3 lg:w-1/3">
             <button 
@@ -415,11 +416,14 @@ export default function App() {
           </div>
 
           <div className="flex-1 border-[4px] border-black p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white flex flex-col justify-between">
-            <div className="flex justify-between items-start mb-4">
-              <h3 className="font-black text-lg uppercase tracking-wider">Visão Geral</h3>
-              <span className="bg-black text-white px-3 py-1 text-xl font-black">{dashboardStats.total}</span>
+            <div className="flex justify-between items-start mb-4 border-b-[3px] border-black pb-2">
+              <h3 className="font-black text-lg uppercase tracking-wider flex items-center gap-3">
+                Visão Geral
+                <span className="bg-black text-white px-3 py-1 text-xl font-black">{dashboardStats.total}</span>
+              </h3>
             </div>
             
+            {}
             <div className="flex flex-col md:flex-row gap-6 items-center mb-2">
               <div className="flex-1 w-full space-y-4">
                 <div className="flex flex-wrap gap-x-4 gap-y-3">
@@ -451,33 +455,44 @@ export default function App() {
               </div>
 
               {pieData && pieData.length > 0 && (
-                <div className="w-24 h-24 md:w-32 md:h-32 flex-shrink-0 rounded-full border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white overflow-hidden transform -rotate-90">
-                  <svg viewBox="0 0 32 32" className="w-full h-full">
+                <div className="w-24 h-24 md:w-32 md:h-32 flex-shrink-0 rounded-full border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white overflow-hidden">
+                  <svg viewBox="0 0 32 32" className="w-full h-full transform -rotate-90">
                     {(() => {
                       let cumulativePercent = 0;
                       const total = pieData.reduce((acc, curr) => acc + curr.value, 0);
                       return pieData.map((slice) => {
                         if (slice.value === 0) return null;
-                        const percent = (slice.value / total) * 100;
-                        if (percent === 100) {
-                           return <circle key={slice.name} onClick={() => toggleTipoFilter(slice.name)} cx="16" cy="16" r="15.91549430918954" fill="transparent" stroke={slice.color} strokeWidth="32" className="cursor-pointer hover:opacity-80 transition-opacity"><title>{slice.name}: {slice.value}</title></circle>
-                        }
-                        const offset = -cumulativePercent;
+                        const percent = slice.value / total;
+                        
+                        const startAngle = cumulativePercent * 360;
+                        const endAngle = (cumulativePercent + percent) * 360;
                         cumulativePercent += percent;
+
+                        const startRad = (startAngle * Math.PI) / 180;
+                        const endRad = (endAngle * Math.PI) / 180;
+                        
+                        const cx = 16, cy = 16, r = 16;
+                        const x1 = cx + r * Math.cos(startRad);
+                        const y1 = cy + r * Math.sin(startRad);
+                        const x2 = cx + r * Math.cos(endRad);
+                        const y2 = cy + r * Math.sin(endRad);
+
+                        const largeArc = percent > 0.5 ? 1 : 0;
+
+                        const pathData = percent === 1 
+                          ? `M ${cx} 0 A ${r} ${r} 0 1 1 ${cx} 32 A ${r} ${r} 0 1 1 ${cx} 0 Z`
+                          : `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
+
                         return (
-                          <circle
+                          <path
                             key={slice.name}
+                            d={pathData}
+                            fill={slice.color}
                             onClick={() => toggleTipoFilter(slice.name)}
-                            cx="16" cy="16" r="15.91549430918954"
-                            fill="transparent"
-                            stroke={slice.color}
-                            strokeWidth="32"
-                            strokeDasharray={`${percent} ${100 - percent}`}
-                            strokeDashoffset={offset}
-                            className={`transition-all duration-500 ease-in-out cursor-pointer hover:stroke-[30px] ${filters.tipo.includes(slice.name) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
+                            className={`cursor-pointer hover:opacity-80 transition-opacity ${filters.tipo.includes(slice.name) ? 'opacity-100 stroke-black stroke-[1px]' : 'opacity-90'}`}
                           >
                             <title>{slice.name}: {slice.value}</title>
-                          </circle>
+                          </path>
                         );
                       });
                     })()}
@@ -488,6 +503,7 @@ export default function App() {
           </div>
         </div>
 
+        {}
         {showFilters && (
           <div className="mb-6 p-6 border-[4px] border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
             <div className="flex justify-between items-center mb-4 border-b-[3px] border-black pb-2">
@@ -570,8 +586,14 @@ export default function App() {
           </div>
         </div>
 
+        {}
         {loading && (
-          <div className="text-center p-20 border-[6px] border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+          <div className="flex flex-col items-center justify-center p-20 border-[6px] border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] gap-6">
+            <svg className="animate-spin w-16 h-16 flex-shrink-0" viewBox="0 0 100 100">
+              <circle cx="50" cy="50" r="40" fill="none" stroke={PIE_COLORS[2]} strokeWidth="12" strokeDasharray="60 251.2" strokeDashoffset="0" strokeLinecap="round" />
+              <circle cx="50" cy="50" r="40" fill="none" stroke={PIE_COLORS[1]} strokeWidth="12" strokeDasharray="60 251.2" strokeDashoffset="-83.7" strokeLinecap="round" />
+              <circle cx="50" cy="50" r="40" fill="none" stroke={PIE_COLORS[0]} strokeWidth="12" strokeDasharray="60 251.2" strokeDashoffset="-167.4" strokeLinecap="round" />
+            </svg>
             <h2 className="text-3xl font-black uppercase animate-pulse">A Carregar Dados...</h2>
           </div>
         )}
@@ -613,15 +635,17 @@ export default function App() {
 
               let isVeto = false;
               let isAprovadoLei = false;
+              let vetoLink = null;
+              let leiLink = null;
 
               if (isProcesso) {
                  const temPalavraVeto = sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto');
-                 const temLinkVeto = parsedLinks.some(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
-                 if (temPalavraVeto || temLinkVeto) isVeto = true;
+                 vetoLink = parsedLinks.find(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
+                 if (temPalavraVeto || vetoLink) isVeto = true;
 
                  const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica');
-                 const temLinkLei = parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
-                 if ((temPalavraLei || temLinkLei) && !isVeto) isAprovadoLei = true;
+                 leiLink = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+                 if ((temPalavraLei || leiLink) && !isVeto) isAprovadoLei = true;
               }
 
               const isArquivado = sitLower.includes('arquivad') || sitLower.includes('retirado') || sitLower.includes('rejeitado') || sitLower.includes('concluíd') || isAprovadoLei || isVeto;
@@ -771,17 +795,10 @@ export default function App() {
                         {parsedLinks.length > 0 && isProcesso && (
                           <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t-[3px] border-black border-dashed">
                             {(() => {
-                              let linkToRender = null;
-                              
-                              if (isVeto) {
-                                  // Preferencia à URL do Diario Oficial do Veto extraida
-                                  const exato = parsedLinks.find(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
-                                  linkToRender = exato || parsedLinks[parsedLinks.length - 1];
-                                  if(linkToRender) return <a href={linkToRender.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-2 border-black px-2 py-1 flex items-center gap-1 hover:bg-red-800 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">VETO (DIÁRIO OFICIAL)</a>;
-                              } else if (isAprovadoLei) {
-                                  const exato = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
-                                  linkToRender = exato || parsedLinks[parsedLinks.length - 1];
-                                  if(linkToRender) return <a href={linkToRender.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-2 border-black px-2 py-1 flex items-center gap-1 hover:bg-[#0097a7] transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</a>;
+                              if (isVeto && vetoLink) {
+                                  return <a href={vetoLink.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-2 border-black px-2 py-1 flex items-center gap-1 hover:bg-red-800 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">VETO (DIÁRIO OFICIAL)</a>;
+                              } else if (isAprovadoLei && leiLink) {
+                                  return <a href={leiLink.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-2 border-black px-2 py-1 flex items-center gap-1 hover:bg-[#0097a7] transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</a>;
                               }
                               return null;
                             })()}
@@ -822,15 +839,17 @@ export default function App() {
 
               let isVeto = false;
               let isAprovadoLei = false;
+              let vetoLink = null;
+              let leiLink = null;
 
               if (isProcesso) {
                  const temPalavraVeto = sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto');
-                 const temLinkVeto = parsedLinks.some(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
-                 if (temPalavraVeto || temLinkVeto) isVeto = true;
+                 vetoLink = parsedLinks.find(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
+                 if (temPalavraVeto || vetoLink) isVeto = true;
 
                  const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica');
-                 const temLinkLei = parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
-                 if ((temPalavraLei || temLinkLei) && !isVeto) isAprovadoLei = true;
+                 leiLink = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+                 if ((temPalavraLei || leiLink) && !isVeto) isAprovadoLei = true;
               }
 
               const isArquivado = sitLower.includes('arquivad') || sitLower.includes('retirado') || sitLower.includes('rejeitado') || sitLower.includes('concluíd') || isAprovadoLei || isVeto;
@@ -931,16 +950,10 @@ export default function App() {
                         {parsedLinks.length > 0 && isProcesso && (
                           <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t-[2px] border-black border-dashed">
                             {(() => {
-                              let linkToRender = null;
-
-                              if (isVeto) {
-                                  const exato = parsedLinks.find(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
-                                  linkToRender = exato || parsedLinks[parsedLinks.length - 1];
-                                  if(linkToRender) return <a href={linkToRender.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[8px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:bg-red-800">VETO (DIÁRIO OFICIAL)</a>;
-                              } else if (isAprovadoLei) {
-                                  const exato = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
-                                  linkToRender = exato || parsedLinks[parsedLinks.length - 1];
-                                  if(linkToRender) return <a href={linkToRender.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[8px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:bg-[#0097a7]">LEI APROVADA</a>;
+                              if (isVeto && vetoLink) {
+                                  return <a href={vetoLink.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[8px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:bg-red-800">VETO (DIÁRIO OFICIAL)</a>;
+                              } else if (isAprovadoLei && leiLink) {
+                                  return <a href={leiLink.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[8px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:bg-[#0097a7]">LEI APROVADA</a>;
                               }
                               return null;
                             })()}
@@ -1125,23 +1138,17 @@ export default function App() {
                       let isAprovadoLeiModal = false;
                       
                       const temPalavraVeto = sitLowerModal.includes('veto') || ultMovLowerModal.includes('veto') || obsLowerModal.includes('veto');
-                      const temLinkVeto = parsedLinks.some(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
-                      if (temPalavraVeto || temLinkVeto) isVetoModal = true;
+                      let vetoLinkModal = parsedLinks.find(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
+                      if (temPalavraVeto || vetoLinkModal) isVetoModal = true;
                       
                       const temPalavraLei = sitLowerModal.includes('lei') || sitLowerModal.includes('norma jurídica');
-                      const temLinkLei = parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
-                      if ((temPalavraLei || temLinkLei) && !isVetoModal) isAprovadoLeiModal = true;
+                      let leiLinkModal = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+                      if ((temPalavraLei || leiLinkModal) && !isVetoModal) isAprovadoLeiModal = true;
 
-                      let linkToRender = null;
-                      
-                      if (isVetoModal) {
-                          const exato = parsedLinks.find(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
-                          linkToRender = exato || parsedLinks[parsedLinks.length - 1];
-                          if(linkToRender) return <div className="pt-4 border-t-[3px] border-black border-dashed flex flex-wrap gap-3"><a href={linkToRender.url} target="_blank" rel="noreferrer" className="text-xs font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[3px] border-black px-4 py-2 flex items-center gap-2 hover:bg-red-800 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform hover:-translate-y-1">VETO (DIÁRIO OFICIAL)</a></div>;
-                      } else if (isAprovadoLeiModal) {
-                          const exato = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
-                          linkToRender = exato || parsedLinks[parsedLinks.length - 1];
-                          if(linkToRender) return <div className="pt-4 border-t-[3px] border-black border-dashed flex flex-wrap gap-3"><a href={linkToRender.url} target="_blank" rel="noreferrer" className="text-xs font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[3px] border-black px-4 py-2 flex items-center gap-2 hover:bg-[#0097a7] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform hover:-translate-y-1"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</a></div>;
+                      if (isVetoModal && vetoLinkModal) {
+                          return <div className="pt-4 border-t-[3px] border-black border-dashed flex flex-wrap gap-3"><a href={vetoLinkModal.url} target="_blank" rel="noreferrer" className="text-xs font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[3px] border-black px-4 py-2 flex items-center gap-2 hover:bg-red-800 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform hover:-translate-y-1">VETO (DIÁRIO OFICIAL)</a></div>;
+                      } else if (isAprovadoLeiModal && leiLinkModal) {
+                          return <div className="pt-4 border-t-[3px] border-black border-dashed flex flex-wrap gap-3"><a href={leiLinkModal.url} target="_blank" rel="noreferrer" className="text-xs font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[3px] border-black px-4 py-2 flex items-center gap-2 hover:bg-[#0097a7] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform hover:-translate-y-1"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</a></div>;
                       }
                   }
                   return null;

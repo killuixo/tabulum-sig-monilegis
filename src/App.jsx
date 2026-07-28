@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 
 const MONDRIAN_COLORS = [
   'bg-[#c41e3a]', // Carmesim
@@ -220,23 +219,21 @@ export default function App() {
         if (links && links !== '-') parsedLinks = JSON.parse(links); 
       } catch(e) {}
 
-      let hasLei = false;
-      let hasVeto = false;
-      
-      if (parsedLinks.length > 0) {
-         hasLei = parsedLinks.some(l => l.label === "Lei Aprovada" || /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
-         hasVeto = parsedLinks.some(l => l.label === "Veto" || l.label.toLowerCase().includes('veto'));
+      let isVeto = false;
+      let isLei = false;
+
+      if (isProcessoQueViraLei) {
+          if (parsedLinks.some(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto')) || s.includes('veto') || u.includes('veto') || o.includes('veto')) {
+              isVeto = true;
+          } else if (parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad')) || s.includes('lei') || s.includes('norma jurídica')) {
+              isLei = true;
+          }
       }
 
       let macro = 'Em Tramitação';
-      
-      if (isProcessoQueViraLei) {
-          if (hasLei || s.includes('lei') || s.includes('norma jurídica')) macro = 'Aprovados';
-          else if (hasVeto || s.includes('veto') || /\bveto\b/.test(u) || /\bveto\b/.test(o)) macro = 'Vetados';
-          else if (s.includes('arquivad') || s.includes('rejeitad') || s.includes('retirad') || s.includes('concluíd')) macro = 'Encerrados';
-      } else {
-          if (s.includes('arquivad') || s.includes('rejeitad') || s.includes('retirad') || s.includes('concluíd')) macro = 'Encerrados';
-      }
+      if (isLei) macro = 'Aprovados';
+      else if (isVeto) macro = 'Vetados';
+      else if (s.includes('arquivad') || s.includes('rejeitad') || s.includes('retirad') || s.includes('concluíd')) macro = 'Encerrados';
 
       stats.macro[macro]++;
       const tipo = getTipoProposicao(item);
@@ -382,18 +379,34 @@ export default function App() {
                 </div>
               </div>
 
-              {pieData.length > 0 && (
-                <div className="w-24 h-24 md:w-32 md:h-32 flex-shrink-0">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={pieData} dataKey="value" cx="50%" cy="50%" innerRadius={25} outerRadius={50} stroke="none">
-                        {pieData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <RechartsTooltip contentStyle={{ borderRadius: '0px', border: '2px solid black', fontWeight: 'bold' }} itemStyle={{ color: 'black' }} />
-                    </PieChart>
-                  </ResponsiveContainer>
+              {pieData && pieData.length > 0 && (
+                <div className="w-24 h-24 md:w-32 md:h-32 flex-shrink-0 rounded-full border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white overflow-hidden transform -rotate-90">
+                  <svg viewBox="0 0 32 32" className="w-full h-full">
+                    {(() => {
+                      let cumulativePercent = 0;
+                      const total = pieData.reduce((acc, curr) => acc + curr.value, 0);
+                      return pieData.map((slice) => {
+                        if (slice.value === 0) return null;
+                        const percent = (slice.value / total) * 100;
+                        const offset = -cumulativePercent;
+                        cumulativePercent += percent;
+                        return (
+                          <circle
+                            key={slice.name}
+                            cx="16" cy="16" r="15.91549430918954"
+                            fill="transparent"
+                            stroke={slice.color}
+                            strokeWidth="32"
+                            strokeDasharray={`${percent} ${100 - percent}`}
+                            strokeDashoffset={offset}
+                            className="transition-all duration-1000 ease-in-out hover:opacity-80 cursor-pointer"
+                          >
+                            <title>{slice.name}: {slice.value}</title>
+                          </circle>
+                        );
+                      });
+                    })()}
+                  </svg>
                 </div>
               )}
             </div>

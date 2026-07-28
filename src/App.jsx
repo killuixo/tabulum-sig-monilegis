@@ -348,21 +348,20 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#f8f9fa] text-black font-sans p-4 md:p-8 selection:bg-[#ffdb58] selection:text-black">
       
-      {}
       <div className="max-w-7xl mx-auto mb-8">
         <div className="border-[6px] border-black bg-white grid grid-cols-1 md:grid-cols-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
           <div className="md:col-span-3 p-6 md:p-10 border-b-[6px] md:border-b-0 md:border-r-[6px] border-black flex flex-row items-center gap-4 md:gap-8">
-            <div onClick={goToFrontPage} className="flex flex-row items-center gap-4 md:gap-8 cursor-pointer group">
+            <div onClick={goToFrontPage} className="flex flex-row items-center gap-4 md:gap-8 cursor-pointer group w-full">
               <img 
                 src="https://raw.githubusercontent.com/killuixo/tabulum-sig-monilegis/refs/heads/main/icon-192.png" 
                 alt="Ícone Tabulum" 
-                className="w-24 h-24 md:w-32 md:h-32 object-contain drop-shadow-md flex-shrink-0 group-hover:scale-105 transition-transform duration-300"
+                className="w-28 h-28 md:w-36 md:h-36 object-contain drop-shadow-md flex-shrink-0 group-hover:scale-105 transition-transform duration-300"
               />
-              <div className="flex flex-col justify-center">
+              <div className="flex flex-col justify-center w-full">
                 <h1 className="text-5xl md:text-7xl font-black uppercase tracking-tighter leading-none mb-0.5">
                   TABULUM
                 </h1>
-                <div className="flex justify-between w-full text-gray-700 font-black uppercase text-[10px] md:text-[14.5px]">
+                <div className="flex justify-between w-full text-gray-700 font-black uppercase text-[11px] md:text-[15.5px]">
                   {monitorLegislativoChars.map((char, i) => (
                     <span key={i}>{char === ' ' ? '\u00A0' : char}</span>
                   ))}
@@ -391,6 +390,8 @@ export default function App() {
 
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col lg:flex-row gap-6 mb-6">
+          
+          {}
           <div className="flex flex-col gap-3 lg:w-1/3">
             <button 
               onClick={() => setToggleAprovadas(!toggleAprovadas)} 
@@ -415,46 +416,45 @@ export default function App() {
             </button>
           </div>
 
-          <div className="flex-1 border-[4px] border-black p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white flex flex-col justify-between">
-            <div className="flex justify-between items-start mb-4">
-              <h3 className="font-black text-lg uppercase tracking-wider flex items-center gap-3">
-                Visão Geral
-                <span className="bg-black text-white px-3 py-1 text-xl font-black">{dashboardStats.total}</span>
-              </h3>
-            </div>
+          {}
+          <div className="flex-1 border-[4px] border-black p-4 md:p-6 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white flex flex-col sm:flex-row gap-6 items-start">
             
-            {}
-            <div className="flex flex-col md:flex-row gap-6 items-start mb-2">
-              <div className="flex-1 w-full space-y-4">
-                <div className="flex flex-wrap gap-x-4 gap-y-3">
-                  {pieData.map((slice) => (
-                    <div key={slice.name} onClick={() => toggleTipoFilter(slice.name)} className={`flex items-center gap-2 cursor-pointer transition-opacity hover:opacity-70 ${filters.tipo.includes(slice.name) ? 'ring-2 ring-offset-2 ring-black rounded-sm' : ''}`}>
-                      <span className="w-3 h-3 border-[1px] border-black" style={{backgroundColor: slice.color}}></span>
-                      <span className="text-[11px] font-bold uppercase text-gray-800">{slice.name}: <strong className="text-black">{slice.value}</strong></span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="space-y-1">
-                  <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-gray-500">
-                    {barConfig.map(b => (
-                       <span key={b.key} onClick={() => toggleMacroFilter(b.key)} className={`cursor-pointer transition-colors hover:text-black ${filters.macro.includes(b.key) ? 'text-black border-b-[2px] border-black' : ''}`} title={`${b.key}: ${dashboardStats.macro[b.key] || 0}`}>
-                          {b.label} {dashboardStats.macro[b.key] || 0}
-                       </span>
-                    ))}
+            <div className="flex-1 flex flex-col gap-5 w-full">
+              <div className="flex justify-start items-center gap-3">
+                <h3 className="font-black text-lg md:text-xl uppercase tracking-wider m-0 leading-none">Visão Geral</h3>
+                <span className="bg-black text-white px-3 py-1 text-xl font-black leading-none">{dashboardStats.total}</span>
+              </div>
+              
+              <div className="flex flex-wrap gap-x-4 gap-y-3">
+                {pieData.map((slice) => (
+                  <div key={slice.name} onClick={() => toggleTipoFilter(slice.name)} className={`flex items-center gap-2 cursor-pointer transition-opacity hover:opacity-70 ${filters.tipo.includes(slice.name) ? 'ring-2 ring-offset-2 ring-black rounded-sm' : ''}`}>
+                    <span className="w-3 h-3 border-[1px] border-black" style={{backgroundColor: slice.color}}></span>
+                    <span className="text-[11px] font-bold uppercase text-gray-800">{slice.name}: <strong className="text-black">{slice.value}</strong></span>
                   </div>
-                  <div className="w-full h-4 flex bg-gray-200 border-[2px] border-black overflow-hidden">
-                    {barConfig.map(b => {
-                       const val = dashboardStats.macro[b.key] || 0;
-                       const pct = (val / dashboardStats.total) * 100 || 0;
-                       if (pct === 0) return null;
-                       return <div key={b.key} onClick={() => toggleMacroFilter(b.key)} className={`h-full ${b.color} cursor-pointer hover:brightness-110 border-r-[2px] border-black last:border-r-0`} style={{width: `${pct}%`}} title={`${b.key}: ${val}`}></div>
-                    })}
-                  </div>
-                </div>
+                ))}
               </div>
 
-              {pieData && pieData.length > 0 && (
+              <div className="space-y-1">
+                <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-gray-500">
+                  {barConfig.map(b => (
+                     <span key={b.key} onClick={() => toggleMacroFilter(b.key)} className={`cursor-pointer transition-colors hover:text-black ${filters.macro.includes(b.key) ? 'text-black border-b-[2px] border-black' : ''}`} title={`${b.key}: ${dashboardStats.macro[b.key] || 0}`}>
+                        {b.label} {dashboardStats.macro[b.key] || 0}
+                     </span>
+                  ))}
+                </div>
+                <div className="w-full h-4 flex bg-gray-200 border-[2px] border-black overflow-hidden">
+                  {barConfig.map(b => {
+                     const val = dashboardStats.macro[b.key] || 0;
+                     const pct = (val / dashboardStats.total) * 100 || 0;
+                     if (pct === 0) return null;
+                     return <div key={b.key} onClick={() => toggleMacroFilter(b.key)} className={`h-full ${b.color} cursor-pointer hover:brightness-110 border-r-[2px] border-black last:border-r-0`} style={{width: `${pct}%`}} title={`${b.key}: ${val}`}></div>
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {pieData && pieData.length > 0 && (
+              <div className="flex justify-center items-start self-start">
                 <div className="w-24 h-24 md:w-32 md:h-32 flex-shrink-0 rounded-full border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white overflow-hidden">
                   <svg viewBox="0 0 32 32" className="w-full h-full transform -rotate-90">
                     {(() => {
@@ -498,8 +498,8 @@ export default function App() {
                     })()}
                   </svg>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -564,6 +564,7 @@ export default function App() {
           </div>
         )}
 
+        {}
         <div className="flex flex-col md:flex-row gap-4 mb-8">
           <div className="flex-1 relative flex border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white focus-within:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] focus-within:-translate-y-0.5 transition-all">
             <div className={`w-4 border-r-[4px] border-black ${activeTab === 'processo' ? MONDRIAN_COLORS[0] : MONDRIAN_COLORS[1]}`}></div>
@@ -1159,6 +1160,7 @@ export default function App() {
         )}
       </div>
 
+      {}
       {toastMsg && (
         <div className="fixed bottom-6 right-6 p-4 border-[4px] border-black bg-[#ffdb58] text-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] z-50 flex items-center gap-3 animate-bounce">
            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>

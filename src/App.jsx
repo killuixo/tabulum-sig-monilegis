@@ -351,17 +351,17 @@ export default function App() {
       <div className="max-w-7xl mx-auto mb-8">
         <div className="border-[6px] border-black bg-white grid grid-cols-1 md:grid-cols-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
           <div className="md:col-span-3 p-6 md:p-10 border-b-[6px] md:border-b-0 md:border-r-[6px] border-black flex flex-row items-center gap-4 md:gap-8">
-            <div onClick={goToFrontPage} className="flex flex-row items-center gap-4 md:gap-8 cursor-pointer group w-full">
+            <div onClick={goToFrontPage} className="flex flex-row items-center gap-4 md:gap-8 cursor-pointer group">
               <img 
                 src="https://raw.githubusercontent.com/killuixo/tabulum-sig-monilegis/refs/heads/main/icon-192.png" 
                 alt="Ícone Tabulum" 
                 className="w-28 h-28 md:w-36 md:h-36 object-contain drop-shadow-md flex-shrink-0 group-hover:scale-105 transition-transform duration-300"
               />
-              <div className="flex flex-col justify-center w-full">
+              <div className="flex flex-col justify-center">
                 <h1 className="text-5xl md:text-7xl font-black uppercase tracking-tighter leading-none mb-0.5">
                   TABULUM
                 </h1>
-                <div className="flex justify-between w-full text-gray-700 font-black uppercase text-[11px] md:text-[15.5px]">
+                <div className="flex justify-between w-full text-gray-700 font-black uppercase text-[10px] md:text-[14.5px]">
                   {monitorLegislativoChars.map((char, i) => (
                     <span key={i}>{char === ' ' ? '\u00A0' : char}</span>
                   ))}

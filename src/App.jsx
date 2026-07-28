@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 
 const MONDRIAN_COLORS = [
   'bg-[#c41e3a]', // Carmesim
@@ -11,12 +12,10 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  // Estados de Busca e Visão
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState('card'); 
   const [activeTab, setActiveTab] = useState('processo'); 
   
-  // Estados dos Filtros Avançados e Rápidos
   const [showFilters, setShowFilters] = useState(false);
   const [toggleAprovadas, setToggleAprovadas] = useState(false);
   const [toggleUtilidade, setToggleUtilidade] = useState(false);
@@ -27,7 +26,6 @@ export default function App() {
     vista: []
   });
 
-  // Estados de Interação
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -80,12 +78,13 @@ export default function App() {
     try {
         if (linksAdicionais && linksAdicionais !== '-') {
             const parsed = JSON.parse(linksAdicionais);
-            hasVeto = parsed.some(l => l.label.toLowerCase().includes('veto') || l.url.includes('doe.sea.sc.gov.br'));
+            hasVeto = parsed.some(l => l.label.toLowerCase().includes('veto'));
             hasLei = parsed.some(l => l.label.toLowerCase().includes('lei') || l.label.toLowerCase().includes('promulgad'));
         }
     } catch(e){}
 
     if (hasLei || s.includes('lei') || s.includes('norma jurídica')) return 'Aprovados';
+    // O veto precisa estar EXPLICITAMENTE escrito nos campos, nada de deduzir por link de Diário Oficial.
     if (hasVeto || s.includes('veto') || s.includes('vetad') || u.includes('veto total') || u.includes('veto parcial') || o.includes('veto')) return 'Vetados';
     if (s.includes('arquivad') || s.includes('rejeitad') || s.includes('retirad') || s.includes('concluíd')) return 'Encerrados';
     return 'Em Tramitação';
@@ -160,7 +159,7 @@ export default function App() {
     fetchData();
   }, []);
 
-  const { filteredData, dashboardStats, filterOptions } = useMemo(() => {
+  const { filteredData, dashboardStats, filterOptions, pieData } = useMemo(() => {
     let filtered = data.filter(item => {
       const num = getNumero(item).toUpperCase();
       if (!num) return false;
@@ -236,9 +235,17 @@ export default function App() {
       stats.tipos[tipo] = (stats.tipos[tipo] || 0) + 1;
     });
 
+    const chartData = [
+      { name: 'Aprovados', value: stats.macro.Aprovados, color: '#008080' },
+      { name: 'Em Tramitação', value: stats.macro['Em Tramitação'], color: '#ffdb58' },
+      { name: 'Vetados', value: stats.macro.Vetados, color: '#c41e3a' },
+      { name: 'Encerrados', value: stats.macro.Encerrados, color: '#6b7280' },
+    ].filter(d => d.value > 0);
+
     return {
       filteredData: filtered,
       dashboardStats: stats,
+      pieData: chartData,
       filterOptions: {
         tipo: Array.from(optTipo).sort(),
         situacao: Array.from(optSituacao).sort(),
@@ -309,7 +316,6 @@ export default function App() {
           </button>
         </div>
 
-        {}
         <div className="flex flex-col lg:flex-row gap-6 mb-6">
           <div className="flex flex-col gap-3 lg:w-1/3">
             <button 
@@ -337,37 +343,55 @@ export default function App() {
 
           <div className="flex-1 border-[4px] border-black p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white flex flex-col justify-between">
             <div className="flex justify-between items-start mb-4">
-              <h3 className="font-black text-lg uppercase tracking-wider">Visão Geral (Atuais)</h3>
+              <h3 className="font-black text-lg uppercase tracking-wider">Visão Geral</h3>
               <span className="bg-black text-white px-3 py-1 text-xl font-black">{dashboardStats.total}</span>
             </div>
             
-            <div className="flex flex-wrap gap-x-6 gap-y-2 mb-4">
-              {Object.entries(dashboardStats.tipos).map(([tipo, count]) => (
-                <div key={tipo} className="flex items-center gap-2">
-                  <span className="w-2 h-2 bg-black"></span>
-                  <span className="text-xs font-bold uppercase text-gray-700">{tipo}: <strong className="text-black">{count}</strong></span>
+            <div className="flex flex-col md:flex-row gap-6 items-center mb-2">
+              <div className="flex-1 w-full space-y-4">
+                <div className="flex flex-wrap gap-x-6 gap-y-2">
+                  {Object.entries(dashboardStats.tipos).map(([tipo, count]) => (
+                    <div key={tipo} className="flex items-center gap-2">
+                      <span className="w-2 h-2 bg-black"></span>
+                      <span className="text-xs font-bold uppercase text-gray-700">{tipo}: <strong className="text-black">{count}</strong></span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
 
-            <div className="space-y-1">
-              <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-gray-500">
-                <span title={`Aprovados: ${dashboardStats.macro.Aprovados}`}>APRO {dashboardStats.macro.Aprovados}</span>
-                <span title={`Em Tramitação: ${dashboardStats.macro['Em Tramitação']}`}>TRAM {dashboardStats.macro['Em Tramitação']}</span>
-                <span title={`Encerrados: ${dashboardStats.macro.Encerrados}`}>ENCE {dashboardStats.macro.Encerrados}</span>
-                <span title={`Vetados: ${dashboardStats.macro.Vetados}`}>VETA {dashboardStats.macro.Vetados}</span>
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-gray-500">
+                    <span title={`Aprovados: ${dashboardStats.macro.Aprovados}`}>APRO {dashboardStats.macro.Aprovados}</span>
+                    <span title={`Em Tramitação: ${dashboardStats.macro['Em Tramitação']}`}>TRAM {dashboardStats.macro['Em Tramitação']}</span>
+                    <span title={`Encerrados: ${dashboardStats.macro.Encerrados}`}>ENCE {dashboardStats.macro.Encerrados}</span>
+                    <span title={`Vetados: ${dashboardStats.macro.Vetados}`}>VETA {dashboardStats.macro.Vetados}</span>
+                  </div>
+                  <div className="w-full h-4 flex bg-gray-200 border-[2px] border-black overflow-hidden">
+                    <div className="h-full bg-[#008080]" style={{width: `${(dashboardStats.macro.Aprovados / dashboardStats.total) * 100 || 0}%`}}></div>
+                    <div className="h-full bg-[#ffdb58]" style={{width: `${(dashboardStats.macro['Em Tramitação'] / dashboardStats.total) * 100 || 0}%`}}></div>
+                    <div className="h-full bg-gray-500" style={{width: `${(dashboardStats.macro.Encerrados / dashboardStats.total) * 100 || 0}%`}}></div>
+                    <div className="h-full bg-[#c41e3a]" style={{width: `${(dashboardStats.macro.Vetados / dashboardStats.total) * 100 || 0}%`}}></div>
+                  </div>
+                </div>
               </div>
-              <div className="w-full h-4 flex bg-gray-200 border-[2px] border-black overflow-hidden">
-                <div className="h-full bg-[#008080]" style={{width: `${(dashboardStats.macro.Aprovados / dashboardStats.total) * 100 || 0}%`}}></div>
-                <div className="h-full bg-[#ffdb58]" style={{width: `${(dashboardStats.macro['Em Tramitação'] / dashboardStats.total) * 100 || 0}%`}}></div>
-                <div className="h-full bg-gray-500" style={{width: `${(dashboardStats.macro.Encerrados / dashboardStats.total) * 100 || 0}%`}}></div>
-                <div className="h-full bg-[#c41e3a]" style={{width: `${(dashboardStats.macro.Vetados / dashboardStats.total) * 100 || 0}%`}}></div>
-              </div>
+
+              {pieData.length > 0 && (
+                <div className="w-24 h-24 md:w-32 md:h-32 flex-shrink-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={pieData} dataKey="value" cx="50%" cy="50%" innerRadius={25} outerRadius={50} stroke="none">
+                        {pieData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip contentStyle={{ borderRadius: '0px', border: '2px solid black', fontWeight: 'bold' }} itemStyle={{ color: 'black' }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {}
         {showFilters && (
           <div className="mb-6 p-6 border-[4px] border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
             <div className="flex justify-between items-center mb-4 border-b-[3px] border-black pb-2">
@@ -428,7 +452,6 @@ export default function App() {
           </div>
         )}
 
-        {}
         <div className="flex flex-col md:flex-row gap-4 mb-8">
           <div className="flex-1 relative flex border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white focus-within:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] focus-within:-translate-y-0.5 transition-all">
             <div className={`w-4 border-r-[4px] border-black ${activeTab === 'processo' ? MONDRIAN_COLORS[0] : MONDRIAN_COLORS[1]}`}></div>
@@ -451,7 +474,6 @@ export default function App() {
           </div>
         </div>
 
-        {}
         {loading && (
           <div className="text-center p-20 border-[6px] border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
             <h2 className="text-3xl font-black uppercase animate-pulse">A Carregar Dados...</h2>
@@ -468,7 +490,6 @@ export default function App() {
           </div>
         )}
 
-        {}
         {!loading && !error && viewMode === 'card' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredData.map((item, index) => {
@@ -487,11 +508,14 @@ export default function App() {
               } catch(e) {}
 
               const sitLower = (getSituacao(item) || '').toLowerCase();
-              let leiLink = parsedLinks.find(l => /\blei\b/i.test(l.label.toLowerCase()) || l.label.toLowerCase().includes('promulgad'));
-              let vetoLink = parsedLinks.find(l => l.label.toLowerCase().includes('veto') || l.url.includes('doe.sea.sc.gov.br'));
+              const ultMovLower = ultimoMovimentoProp.toLowerCase();
+              const obsLower = obsProp.toLowerCase();
+
+              const hasLeiLink = parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+              const hasVetoLink = parsedLinks.some(l => l.label.toLowerCase().includes('veto'));
               
-              const isAprovadoLei = leiLink || sitLower.includes('lei') || sitLower.includes('norma jurídica');
-              const isVeto = vetoLink || sitLower.includes('veto') || (getUltimoMovimento(item) || '').toLowerCase().includes('veto') || (getObservacoes(item) || '').toLowerCase().includes('veto');
+              const isAprovadoLei = hasLeiLink || sitLower.includes('lei') || sitLower.includes('norma jurídica');
+              const isVeto = hasVetoLink || sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto');
               const isArquivado = sitLower.includes('arquivad') || sitLower.includes('retirado') || sitLower.includes('rejeitado') || sitLower.includes('concluíd') || isAprovadoLei;
 
               let boxColorClass = 'bg-[#ffdb58]/30 text-black border-black';
@@ -501,12 +525,7 @@ export default function App() {
               
               let textoCaixa = formatarUltimoMovimento(ultimoMovimentoProp);
 
-              if (isVeto) {
-                boxColorClass = 'bg-[#c41e3a] text-white border-black';
-                titleColorClass = 'text-white';
-                boxTitle = 'Projeto Vetado';
-                iconeCaixa = <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
-              } else if (vistaProp) {
+              if (vistaProp) {
                 boxColorClass = 'bg-[#c41e3a] text-white border-black';
                 titleColorClass = 'text-white';
                 boxTitle = 'Pedido de Vista Ativo';
@@ -530,17 +549,18 @@ export default function App() {
 
               return (
                 <div key={index} onClick={(e) => { if(!e.target.closest('a') && !e.target.closest('button') && !e.target.closest('textarea')) setSelectedItem(item); }} className="relative hover:-translate-y-1 transition-transform duration-200 cursor-pointer group flex flex-col h-full">
-                  <div className={`absolute inset-0 top-[6px] left-[6px] right-[-6px] bottom-[-6px] transition-all duration-200 group-hover:top-[10px] group-hover:left-[10px] group-hover:right-[-10px] group-hover:bottom-[-10px] ${isAprovadoLei ? 'bg-gradient-to-br from-[#c41e3a] via-[#ffdb58] to-[#008080]' : 'bg-black'}`}></div>
+                  <div className={`absolute inset-0 top-[6px] left-[6px] right-[-6px] bottom-[-6px] transition-all duration-200 group-hover:top-[10px] group-hover:left-[10px] group-hover:right-[-10px] group-hover:bottom-[-10px] ${isAprovadoLei ? 'bg-gradient-to-br from-[#c41e3a] via-[#ffdb58] to-[#008080]' : (isVeto ? 'bg-[#c41e3a]' : 'bg-black')}`}></div>
                   
                   <div className="relative z-10 bg-white border-[5px] border-black flex flex-col flex-grow">
-                    <div className="border-b-[5px] border-black p-4 flex justify-between items-start bg-gray-100">
+                    <div className={`border-b-[5px] border-black p-4 flex justify-between items-start ${isVeto && !isAprovadoLei ? 'bg-red-50' : 'bg-gray-100'}`}>
                       <div>
-                        <span className="bg-black text-white px-2 py-1 text-xs font-black tracking-widest uppercase">
+                        <span className={`px-2 py-1 text-xs font-black tracking-widest uppercase ${isVeto && !isAprovadoLei ? 'bg-[#c41e3a] text-white' : 'bg-black text-white'}`}>
                           {getTipoProposicao(item)}
                         </span>
                         <h3 className="text-3xl font-black mt-2 text-black">
                           {numeroProp}
                         </h3>
+                        {isVeto && !isAprovadoLei && <span className="text-[10px] font-black text-[#c41e3a] uppercase tracking-wider block mt-1">VETO REGISTRADO</span>}
                       </div>
                       {linkProp && linkProp !== '-' && (
                         <a href={linkProp} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="bg-white p-2 border-2 border-black hover:bg-gray-200 transition-colors" title="Ver na ALESC">
@@ -599,7 +619,7 @@ export default function App() {
                             </div>
                           </div>
                           {infoRelatoriaProp && (
-                            <p className="text-sm font-bold text-gray-600 italic leading-tight mt-1">
+                            <p className="text-[13px] font-bold text-gray-600 italic leading-tight mt-1">
                               {infoRelatoriaProp}
                             </p>
                           )}
@@ -635,12 +655,30 @@ export default function App() {
                         {parsedLinks.length > 0 && (
                           <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t-[3px] border-black border-dashed">
                             {(() => {
-                              return (
-                                <>
-                                  {leiLink && <a href={leiLink.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-2 border-black px-2 py-1 flex items-center gap-1 hover:bg-[#0097a7] transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</a>}
-                                  {vetoLink && <a href={vetoLink.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-2 border-black px-2 py-1 flex items-center gap-1 hover:bg-red-800 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">VETO (DIÁRIO OFICIAL)</a>}
-                                </>
-                              );
+                              let linkToRender = null;
+                              let linkType = '';
+
+                              if (isVeto) {
+                                  // Se tiver a palavra Veto, tenta encontrar o link nomeado Veto ou o último link válido para o DOE.
+                                  const exactVeto = parsedLinks.find(l => l.label.toLowerCase().includes('veto'));
+                                  const doeVeto = parsedLinks.slice().reverse().find(l => l.url.includes('doe.sea.sc.gov.br'));
+                                  linkToRender = exactVeto || doeVeto || parsedLinks[parsedLinks.length - 1];
+                                  linkType = 'veto';
+                              } 
+                              else if (isAprovadoLei) {
+                                  // Se for aprovado, pega o link de Promulgação/Lei ou o último disponível.
+                                  const exactLei = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+                                  linkToRender = exactLei || parsedLinks[parsedLinks.length - 1];
+                                  linkType = 'lei';
+                              }
+
+                              if (!linkToRender) return null;
+
+                              if (linkType === 'veto') {
+                                  return <a href={linkToRender.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-2 border-black px-2 py-1 flex items-center gap-1 hover:bg-red-800 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">VETO (DIÁRIO OFICIAL)</a>;
+                              } else {
+                                  return <a href={linkToRender.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-2 border-black px-2 py-1 flex items-center gap-1 hover:bg-[#0097a7] transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</a>;
+                              }
                             })()}
                           </div>
                         )}
@@ -653,7 +691,6 @@ export default function App() {
           </div>
         )}
 
-        {}
         {!loading && !error && viewMode === 'list' && (
           <div className="flex flex-col gap-4">
             {filteredData.map((item, index) => {
@@ -672,11 +709,14 @@ export default function App() {
               } catch(e) {}
 
               const sitLower = (getSituacao(item) || '').toLowerCase();
-              let leiLink = parsedLinks.find(l => /\blei\b/i.test(l.label.toLowerCase()) || l.label.toLowerCase().includes('promulgad'));
-              let vetoLink = parsedLinks.find(l => l.label.toLowerCase().includes('veto') || l.url.includes('doe.sea.sc.gov.br'));
+              const ultMovLower = ultimoMovimentoProp.toLowerCase();
+              const obsLower = obsProp.toLowerCase();
 
-              const isAprovadoLei = leiLink || sitLower.includes('lei') || sitLower.includes('norma jurídica');
-              const isVeto = vetoLink || sitLower.includes('veto') || (getUltimoMovimento(item) || '').toLowerCase().includes('veto') || (getObservacoes(item) || '').toLowerCase().includes('veto');
+              const hasLeiLink = parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+              const hasVetoLink = parsedLinks.some(l => l.label.toLowerCase().includes('veto'));
+
+              const isAprovadoLei = hasLeiLink || sitLower.includes('lei') || sitLower.includes('norma jurídica');
+              const isVeto = hasVetoLink || sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto');
               const isArquivado = sitLower.includes('arquivad') || sitLower.includes('retirado') || sitLower.includes('rejeitado') || sitLower.includes('concluíd') || isAprovadoLei;
 
               let boxColorClass = 'bg-white text-black';
@@ -684,11 +724,7 @@ export default function App() {
               let boxTitle = 'Último Movimento';
               let textoCaixa = formatarUltimoMovimento(ultimoMovimentoProp);
 
-              if (isVeto) {
-                boxColorClass = 'bg-[#c41e3a] text-white';
-                titleColorClass = 'text-white';
-                boxTitle = 'Projeto Vetado';
-              } else if (vistaProp) {
+              if (vistaProp) {
                 boxColorClass = 'bg-[#c41e3a] text-white';
                 titleColorClass = 'text-white';
                 boxTitle = 'Pedido de Vista';
@@ -712,14 +748,14 @@ export default function App() {
 
               return (
                 <div key={index} onClick={(e) => { if(!e.target.closest('a') && !e.target.closest('button') && !e.target.closest('textarea')) setSelectedItem(item); }} className="relative hover:-translate-y-1 transition-transform duration-200 cursor-pointer group flex flex-col md:flex-row h-full">
-                  <div className={`absolute inset-0 top-[4px] left-[4px] right-[-4px] bottom-[-4px] transition-all duration-200 group-hover:top-[6px] group-hover:left-[6px] group-hover:right-[-6px] group-hover:bottom-[-6px] ${isAprovadoLei ? 'bg-gradient-to-br from-[#c41e3a] via-[#ffdb58] to-[#008080]' : 'bg-black'}`}></div>
+                  <div className={`absolute inset-0 top-[4px] left-[4px] right-[-4px] bottom-[-4px] transition-all duration-200 group-hover:top-[6px] group-hover:left-[6px] group-hover:right-[-6px] group-hover:bottom-[-6px] ${isAprovadoLei ? 'bg-gradient-to-br from-[#c41e3a] via-[#ffdb58] to-[#008080]' : (isVeto ? 'bg-[#c41e3a]' : 'bg-black')}`}></div>
 
                   <div className="relative z-10 bg-white border-[4px] border-black flex flex-col md:flex-row flex-grow overflow-hidden">
-                    <div className="w-full md:w-4 min-h-[1rem] md:min-h-full border-b-[4px] md:border-b-0 md:border-r-[4px] border-black flex-shrink-0 bg-gray-200"></div>
+                    <div className={`w-full md:w-4 min-h-[1rem] md:min-h-full border-b-[4px] md:border-b-0 md:border-r-[4px] border-black flex-shrink-0 ${isVeto && !isAprovadoLei ? 'bg-[#c41e3a]' : 'bg-gray-200'}`}></div>
                     
                     <div className="p-4 flex-grow flex flex-col md:flex-row gap-6 items-start md:items-center">
                       <div className="flex flex-row md:flex-col gap-2 items-center md:items-start md:w-32 flex-shrink-0">
-                        <span className="bg-black text-white px-2 py-1 text-xs font-black tracking-widest uppercase">
+                        <span className={`px-2 py-1 text-xs font-black tracking-widest uppercase ${isVeto && !isAprovadoLei ? 'bg-[#c41e3a] text-white' : 'bg-black text-white'}`}>
                           {getTipoProposicao(item)}
                         </span>
                         <span className="text-sm font-black tracking-widest uppercase">
@@ -728,6 +764,7 @@ export default function App() {
                         {linkProp && linkProp !== '-' && (
                           <a href={linkProp} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] font-black uppercase underline hover:text-[#008080]">Ver na ALESC</a>
                         )}
+                        {isVeto && !isAprovadoLei && <span className="text-[9px] font-black text-[#c41e3a] uppercase tracking-wider block mt-1">VETO REGISTRADO</span>}
                       </div>
 
                       <div className="flex-grow grid grid-cols-1 md:grid-cols-12 gap-4 w-full">
@@ -773,12 +810,27 @@ export default function App() {
                         {parsedLinks.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t-[2px] border-black border-dashed">
                             {(() => {
-                              return (
-                                <>
-                                  {leiLink && <a href={leiLink.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[8px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:bg-[#0097a7]">LEI APROVADA</a>}
-                                  {vetoLink && <a href={vetoLink.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[8px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:bg-red-800">VETO (DIÁRIO OFICIAL)</a>}
-                                </>
-                              );
+                              let linkToRender = null;
+                              let linkType = '';
+
+                              if (isVeto) {
+                                  const exactVeto = parsedLinks.find(l => l.label.toLowerCase().includes('veto'));
+                                  const doeVeto = parsedLinks.slice().reverse().find(l => l.url.includes('doe.sea.sc.gov.br'));
+                                  linkToRender = exactVeto || doeVeto || parsedLinks[parsedLinks.length - 1];
+                                  linkType = 'veto';
+                              } else if (isAprovadoLei) {
+                                  const exactLei = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+                                  linkToRender = exactLei || parsedLinks[parsedLinks.length - 1];
+                                  linkType = 'lei';
+                              }
+
+                              if (!linkToRender) return null;
+
+                              if (linkType === 'veto') {
+                                  return <a href={linkToRender.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[8px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:bg-red-800">VETO (DIÁRIO OFICIAL)</a>;
+                              } else {
+                                  return <a href={linkToRender.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[8px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:bg-[#0097a7]">LEI APROVADA</a>;
+                              }
                             })()}
                           </div>
                         )}
@@ -791,7 +843,6 @@ export default function App() {
           </div>
         )}
         
-        {}
         {!loading && !error && filteredData.length === 0 && (
           <div className="text-center p-12 border-[5px] border-black bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
             <h3 className="text-2xl font-black uppercase">Nenhum resultado nesta aba.</h3>
@@ -826,40 +877,15 @@ export default function App() {
 
               <div className="p-6 md:p-8 flex flex-col gap-6 overflow-y-auto">
                 
-                {(() => {
-                  const sitLowerModal = (getSituacao(selectedItem) || '').toLowerCase();
-                  const linksAdicProp = getLinksAdicionais(selectedItem);
-                  let parsedLinks = [];
-                  try { if (linksAdicProp && linksAdicProp !== '-') parsedLinks = JSON.parse(linksAdicProp); } catch(e) {}
-                  let vetoLinkModal = parsedLinks.find(l => l.label.toLowerCase().includes('veto') || l.url.includes('doe.sea.sc.gov.br'));
-                  const isVetoModal = vetoLinkModal || sitLowerModal.includes('veto') || (getUltimoMovimento(selectedItem) || '').toLowerCase().includes('veto') || (getObservacoes(selectedItem) || '').toLowerCase().includes('veto');
-
-                  if (isVetoModal) {
-                    return (
-                      <div className="border-[3px] border-black p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-[#c41e3a]">
-                        <p className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2 mb-2">
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                          Projeto Vetado
-                        </p>
-                        <p className="text-lg font-black text-white leading-snug">
-                          {formatarUltimoMovimento(getUltimoMovimento(selectedItem)) || '-'}
-                        </p>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div className="border-[3px] border-black p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-[#ffdb58]">
-                      <p className="text-xs font-black text-black uppercase tracking-wider flex items-center gap-2 mb-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
-                        Último Movimento
-                      </p>
-                      <p className="text-lg font-black text-black leading-snug">
-                        {formatarUltimoMovimento(getUltimoMovimento(selectedItem)) || '-'}
-                      </p>
-                    </div>
-                  );
-                })()}
+                <div className="border-[3px] border-black p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-[#ffdb58]">
+                  <p className="text-xs font-black text-black uppercase tracking-wider flex items-center gap-2 mb-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+                    Último Movimento
+                  </p>
+                  <p className="text-lg font-black text-black leading-snug">
+                    {formatarUltimoMovimento(getUltimoMovimento(selectedItem)) || '-'}
+                  </p>
+                </div>
 
                 <div className="border-[3px] border-black p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
                   <p className="text-xs font-black text-gray-500 uppercase tracking-wider mb-2">Ementa / Resumo</p>
@@ -898,7 +924,7 @@ export default function App() {
                               <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Relator(a) Atual</p>
                               <p className="text-[15px] font-black uppercase">{getRelator(selectedItem) || '-'}</p>
                               {getInformacaoRelatoria(selectedItem) && (
-                                <p className="text-sm font-bold text-gray-600 leading-tight italic mt-1">
+                                <p className="text-[13px] font-bold text-gray-600 leading-tight italic mt-1">
                                   {getInformacaoRelatoria(selectedItem)}
                                 </p>
                               )}
@@ -954,17 +980,43 @@ export default function App() {
                     const rawLinks = getLinksAdicionais(selectedItem);
                     if (rawLinks && rawLinks !== '-') parsedLinks = JSON.parse(rawLinks);
                   } catch(e) {}
+
+                  const sitLower = (getSituacao(selectedItem) || '').toLowerCase();
+                  const ultMovLower = (getUltimoMovimento(selectedItem) || '').toLowerCase();
+                  const obsLower = (getObservacoes(selectedItem) || '').toLowerCase();
+                  
+                  const hasLeiLink = parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+                  const hasVetoLink = parsedLinks.some(l => l.label.toLowerCase().includes('veto'));
+                  
+                  const isAprovadoLei = hasLeiLink || sitLower.includes('lei') || sitLower.includes('norma jurídica');
+                  const isVeto = hasVetoLink || sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto');
                   
                   if (parsedLinks.length > 0) {
-                    let leiLink = parsedLinks.find(l => /\blei\b/i.test(l.label.toLowerCase()) || l.label.toLowerCase().includes('promulgad'));
-                    let vetoLink = parsedLinks.find(l => l.label.toLowerCase().includes('veto') || l.url.includes('doe.sea.sc.gov.br'));
+                    let linkToRender = null;
+                    let linkType = '';
 
-                    return (
-                      <div className="pt-4 border-t-[3px] border-black border-dashed flex flex-wrap gap-3">
-                        {leiLink && <a href={leiLink.url} target="_blank" rel="noreferrer" className="text-xs font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[3px] border-black px-4 py-2 flex items-center gap-2 hover:bg-[#0097a7] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform hover:-translate-y-1"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</a>}
-                        {vetoLink && <a href={vetoLink.url} target="_blank" rel="noreferrer" className="text-xs font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[3px] border-black px-4 py-2 flex items-center gap-2 hover:bg-red-800 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform hover:-translate-y-1">VETO (DIÁRIO OFICIAL)</a>}
-                      </div>
-                    );
+                    if (isVeto) {
+                        const exactVeto = parsedLinks.find(l => l.label.toLowerCase().includes('veto'));
+                        const doeVeto = parsedLinks.slice().reverse().find(l => l.url.includes('doe.sea.sc.gov.br'));
+                        linkToRender = exactVeto || doeVeto || parsedLinks[parsedLinks.length - 1];
+                        linkType = 'veto';
+                    } else if (isAprovadoLei) {
+                        const exactLei = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+                        linkToRender = exactLei || parsedLinks[parsedLinks.length - 1];
+                        linkType = 'lei';
+                    }
+
+                    if (linkToRender) {
+                      return (
+                        <div className="pt-4 border-t-[3px] border-black border-dashed flex flex-wrap gap-3">
+                          {linkType === 'veto' ? (
+                              <a href={linkToRender.url} target="_blank" rel="noreferrer" className="text-xs font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[3px] border-black px-4 py-2 flex items-center gap-2 hover:bg-red-800 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform hover:-translate-y-1">VETO (DIÁRIO OFICIAL)</a>
+                          ) : (
+                              <a href={linkToRender.url} target="_blank" rel="noreferrer" className="text-xs font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[3px] border-black px-4 py-2 flex items-center gap-2 hover:bg-[#0097a7] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform hover:-translate-y-1"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</a>
+                          )}
+                        </div>
+                      );
+                    }
                   }
                   return null;
                 })()}

@@ -6,15 +6,23 @@ const MONDRIAN_COLORS = [
   'bg-[#ffdb58]', // Mostarda
 ];
 
+// Paleta expandida para os diversos tipos de proposição no gráfico de pizza
+const PIE_COLORS = [
+  '#008080', '#c41e3a', '#ffdb58', '#2b2b2b', '#8a2be2', 
+  '#e67e22', '#16a085', '#d35400', '#2980b9', '#7f8c8d', '#8e44ad'
+];
+
 export default function App() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
+  // Estados de Busca e Visão
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState('card'); 
   const [activeTab, setActiveTab] = useState('processo'); 
   
+  // Estados dos Filtros Avançados e Rápidos
   const [showFilters, setShowFilters] = useState(false);
   const [toggleAprovadas, setToggleAprovadas] = useState(false);
   const [toggleUtilidade, setToggleUtilidade] = useState(false);
@@ -22,9 +30,11 @@ export default function App() {
     tipo: [],
     situacao: [],
     relator: [],
-    vista: []
+    vista: [],
+    macro: [] // Novo filtro de clique do Dashboard
   });
 
+  // Estados de Interação
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -145,22 +155,52 @@ export default function App() {
       const prefix = num.split('/')[0].replace('.', ''); 
       const processoPrefixes = ['PL', 'PEC', 'PLC', 'PDL', 'PRC', 'MPV', 'VET', 'MSG', 'PSA'];
       const isProcesso = processoPrefixes.includes(prefix);
+      
       if (activeTab === 'processo' && !isProcesso) return false;
       if (activeTab === 'atividade' && isProcesso) return false;
 
       const sitLower = getSituacao(item).toLowerCase();
+      const ultMovLower = getUltimoMovimento(item).toLowerCase();
+      const obsLower = getObservacoes(item).toLowerCase();
       const emenLower = getEmenta(item).toLowerCase();
       
-      const linksAdicProp = getLinksAdicionais(item);
       let parsedLinks = [];
-      try { if (linksAdicProp && linksAdicProp !== '-') parsedLinks = JSON.parse(linksAdicProp); } catch(e) {}
+      try {
+        const rawLinks = getLinksAdicionais(item);
+        if (rawLinks && rawLinks !== '-') parsedLinks = JSON.parse(rawLinks);
+      } catch(e) {}
       
-      // BLINDAGEM DE PROCESSOS: Só consideramos Aprovado/Vetado se a sigla fizer parte de Processo Legislativo
-      const isProcessoQueViraLei = ['PL', 'PEC', 'PLC', 'PDL', 'MPV'].includes(prefix);
+      let isVeto = false;
+      let isAprovadoLei = false;
 
-      const hasLeiLink = parsedLinks.some(l => l.label === "Lei Aprovada" || /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
-      const isAprovadoLei = isProcessoQueViraLei && (hasLeiLink || sitLower.includes('lei') || sitLower.includes('norma jurídica'));
+      if (isProcesso) {
+         const temPalavraVeto = sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto');
+         const temLinkVeto = parsedLinks.some(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
+         if (temPalavraVeto || temLinkVeto) isVeto = true;
 
+         const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica');
+         const temLinkLei = parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+         if ((temPalavraLei || temLinkLei) && !isVeto) isAprovadoLei = true;
+      }
+
+      // Aplicação das métricas Macros exatas por Aba para filtro de clique
+      let macroStatus = '';
+      if (activeTab === 'processo') {
+        if (isAprovadoLei) macroStatus = 'Aprovados';
+        else if (isVeto) macroStatus = 'Vetados';
+        else if (sitLower.includes('arquivad') || sitLower.includes('rejeitad') || sitLower.includes('retirad') || sitLower.includes('concluíd')) macroStatus = 'Encerrados';
+        else macroStatus = 'Em Tramitação';
+      } else {
+        if (sitLower.includes('arquivad') || sitLower.includes('encerrad') || sitLower.includes('concluíd')) macroStatus = 'Arquivados';
+        else if (sitLower.includes('encaminhado') || ultMovLower.includes('encaminhado') || sitLower.includes('expedido') || ultMovLower.includes('expedido')) macroStatus = 'Encaminhados';
+        else if (sitLower.includes('aguardando') || ultMovLower.includes('aguardando') || sitLower.includes('diligência') || ultMovLower.includes('diligência')) macroStatus = 'Aguardando';
+        else macroStatus = 'Em Tramitação';
+      }
+
+      // Verifica os Filtros de Clique (Dashboard)
+      if (filters.macro.length > 0 && !filters.macro.includes(macroStatus)) return false;
+
+      // Restantes Filtros Laterais
       if (toggleAprovadas && !isAprovadoLei) return false;
       if (toggleUtilidade && !emenLower.includes('utilidade pública')) return false;
 
@@ -187,8 +227,7 @@ export default function App() {
 
     const baseDataForFilters = data.filter(item => {
       const prefix = (getNumero(item).toUpperCase() || '').split('/')[0].replace('.', ''); 
-      const processoPrefixes = ['PL', 'PEC', 'PLC', 'PDL', 'PRC', 'MPV', 'VET', 'MSG', 'PSA'];
-      const isProcesso = processoPrefixes.includes(prefix);
+      const isProcesso = ['PL', 'PEC', 'PLC', 'PDL', 'PRC', 'MPV', 'VET', 'MSG', 'PSA'].includes(prefix);
       return activeTab === 'processo' ? isProcesso : !isProcesso;
     });
 
@@ -202,55 +241,63 @@ export default function App() {
 
     const stats = {
       total: filtered.length,
-      macro: { Aprovados: 0, Vetados: 0, 'Em Tramitação': 0, Encerrados: 0 },
+      macro: { Aprovados: 0, Vetados: 0, Encerrados: 0, 'Em Tramitação': 0, Aguardando: 0, Encaminhados: 0, Arquivados: 0 },
       tipos: {}
     };
 
     filtered.forEach(item => {
-      const prefix = (getNumero(item).toUpperCase() || '').split('/')[0].replace('.', '');
-      const isProcessoQueViraLei = ['PL', 'PEC', 'PLC', 'PDL', 'MPV'].includes(prefix);
-      const s = getSituacao(item).toLowerCase();
-      const u = getUltimoMovimento(item).toLowerCase();
-      const o = getObservacoes(item).toLowerCase();
-
+      const sitLower = getSituacao(item).toLowerCase();
+      const ultMovLower = getUltimoMovimento(item).toLowerCase();
+      const obsLower = getObservacoes(item).toLowerCase();
+      
       let parsedLinks = [];
-      try { 
-        const links = getLinksAdicionais(item);
-        if (links && links !== '-') parsedLinks = JSON.parse(links); 
+      try {
+        const rawLinks = getLinksAdicionais(item);
+        if (rawLinks && rawLinks !== '-') parsedLinks = JSON.parse(rawLinks);
       } catch(e) {}
+      
+      let macroStatus = '';
+      if (activeTab === 'processo') {
+         let isVeto = false;
+         let isAprovadoLei = false;
 
-      let isVeto = false;
-      let isLei = false;
+         const temPalavraVeto = sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto');
+         const temLinkVeto = parsedLinks.some(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
+         if (temPalavraVeto || temLinkVeto) isVeto = true;
 
-      if (isProcessoQueViraLei) {
-          if (parsedLinks.some(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto')) || s.includes('veto') || u.includes('veto') || o.includes('veto')) {
-              isVeto = true;
-          } else if (parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad')) || s.includes('lei') || s.includes('norma jurídica')) {
-              isLei = true;
-          }
+         const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica');
+         const temLinkLei = parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+         if ((temPalavraLei || temLinkLei) && !isVeto) isAprovadoLei = true;
+
+         if (isAprovadoLei) macroStatus = 'Aprovados';
+         else if (isVeto) macroStatus = 'Vetados';
+         else if (sitLower.includes('arquivad') || sitLower.includes('rejeitad') || sitLower.includes('retirad') || sitLower.includes('concluíd')) macroStatus = 'Encerrados';
+         else macroStatus = 'Em Tramitação';
+      } else {
+         if (sitLower.includes('arquivad') || sitLower.includes('encerrad') || sitLower.includes('concluíd')) macroStatus = 'Arquivados';
+         else if (sitLower.includes('encaminhado') || ultMovLower.includes('encaminhado') || sitLower.includes('expedido') || ultMovLower.includes('expedido')) macroStatus = 'Encaminhados';
+         else if (sitLower.includes('aguardando') || ultMovLower.includes('aguardando') || sitLower.includes('diligência') || ultMovLower.includes('diligência')) macroStatus = 'Aguardando';
+         else macroStatus = 'Em Tramitação';
       }
 
-      let macro = 'Em Tramitação';
-      if (isLei) macro = 'Aprovados';
-      else if (isVeto) macro = 'Vetados';
-      else if (s.includes('arquivad') || s.includes('rejeitad') || s.includes('retirad') || s.includes('concluíd')) macro = 'Encerrados';
-
-      stats.macro[macro]++;
+      stats.macro[macroStatus] = (stats.macro[macroStatus] || 0) + 1;
+      
       const tipo = getTipoProposicao(item);
       stats.tipos[tipo] = (stats.tipos[tipo] || 0) + 1;
     });
 
-    const chartData = [
-      { name: 'Aprovados', value: stats.macro.Aprovados, color: '#008080' },
-      { name: 'Em Tramitação', value: stats.macro['Em Tramitação'], color: '#ffdb58' },
-      { name: 'Vetados', value: stats.macro.Vetados, color: '#c41e3a' },
-      { name: 'Encerrados', value: stats.macro.Encerrados, color: '#6b7280' },
-    ].filter(d => d.value > 0);
+    const generatedPieData = Object.entries(stats.tipos)
+      .sort((a, b) => b[1] - a[1]) 
+      .map(([name, value], index) => ({
+        name,
+        value,
+        color: PIE_COLORS[index % PIE_COLORS.length]
+      }));
 
     return {
       filteredData: filtered,
       dashboardStats: stats,
-      pieData: chartData,
+      pieData: generatedPieData,
       filterOptions: {
         tipo: Array.from(optTipo).sort(),
         situacao: Array.from(optSituacao).sort(),
@@ -270,9 +317,30 @@ export default function App() {
     });
   };
 
-  const limparFiltrosAvançados = () => {
-    setFilters({ tipo: [], situacao: [], relator: [], vista: [] });
+  const toggleMacroFilter = (macroName) => {
+     setFilters(prev => ({ ...prev, macro: prev.macro.includes(macroName) ? [] : [macroName] }));
   };
+
+  const toggleTipoFilter = (tipoName) => {
+     setFilters(prev => ({ ...prev, tipo: prev.tipo.includes(tipoName) ? [] : [tipoName] }));
+  };
+
+  const limparFiltrosAvançados = () => {
+    setFilters({ tipo: [], situacao: [], relator: [], vista: [], macro: [] });
+  };
+
+  // Configuração Dinâmica da Barra de Totais dependendo da Aba
+  const barConfig = activeTab === 'processo' ? [
+    { key: 'Aprovados', label: 'APRO', color: 'bg-[#008080]' },
+    { key: 'Em Tramitação', label: 'TRAM', color: 'bg-[#ffdb58]' },
+    { key: 'Encerrados', label: 'ENCE', color: 'bg-gray-500' },
+    { key: 'Vetados', label: 'VETA', color: 'bg-[#c41e3a]' }
+  ] : [
+    { key: 'Aguardando', label: 'AGUA', color: 'bg-[#ffdb58]' },
+    { key: 'Encaminhados', label: 'ENCA', color: 'bg-[#008080]' },
+    { key: 'Arquivados', label: 'ARQU', color: 'bg-gray-500' },
+    { key: 'Em Tramitação', label: 'OUTR', color: 'bg-black' }
+  ];
 
   return (
     <div className="min-h-screen bg-[#f8f9fa] text-black font-sans p-4 md:p-8 selection:bg-[#ffdb58] selection:text-black">
@@ -354,27 +422,30 @@ export default function App() {
             
             <div className="flex flex-col md:flex-row gap-6 items-center mb-2">
               <div className="flex-1 w-full space-y-4">
-                <div className="flex flex-wrap gap-x-6 gap-y-2">
-                  {Object.entries(dashboardStats.tipos).map(([tipo, count]) => (
-                    <div key={tipo} className="flex items-center gap-2">
-                      <span className="w-2 h-2 bg-black"></span>
-                      <span className="text-xs font-bold uppercase text-gray-700">{tipo}: <strong className="text-black">{count}</strong></span>
+                <div className="flex flex-wrap gap-x-4 gap-y-3">
+                  {pieData.map((slice) => (
+                    <div key={slice.name} onClick={() => toggleTipoFilter(slice.name)} className={`flex items-center gap-2 cursor-pointer transition-opacity hover:opacity-70 ${filters.tipo.includes(slice.name) ? 'ring-2 ring-offset-2 ring-black rounded-sm' : ''}`}>
+                      <span className="w-3 h-3 border-[1px] border-black" style={{backgroundColor: slice.color}}></span>
+                      <span className="text-[11px] font-bold uppercase text-gray-800">{slice.name}: <strong className="text-black">{slice.value}</strong></span>
                     </div>
                   ))}
                 </div>
 
                 <div className="space-y-1">
                   <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-gray-500">
-                    <span title={`Aprovados: ${dashboardStats.macro.Aprovados}`}>APRO {dashboardStats.macro.Aprovados}</span>
-                    <span title={`Em Tramitação: ${dashboardStats.macro['Em Tramitação']}`}>TRAM {dashboardStats.macro['Em Tramitação']}</span>
-                    <span title={`Encerrados: ${dashboardStats.macro.Encerrados}`}>ENCE {dashboardStats.macro.Encerrados}</span>
-                    <span title={`Vetados: ${dashboardStats.macro.Vetados}`}>VETA {dashboardStats.macro.Vetados}</span>
+                    {barConfig.map(b => (
+                       <span key={b.key} onClick={() => toggleMacroFilter(b.key)} className={`cursor-pointer transition-colors hover:text-black ${filters.macro.includes(b.key) ? 'text-black border-b-[2px] border-black' : ''}`} title={`${b.key}: ${dashboardStats.macro[b.key] || 0}`}>
+                          {b.label} {dashboardStats.macro[b.key] || 0}
+                       </span>
+                    ))}
                   </div>
                   <div className="w-full h-4 flex bg-gray-200 border-[2px] border-black overflow-hidden">
-                    <div className="h-full bg-[#008080]" style={{width: `${(dashboardStats.macro.Aprovados / dashboardStats.total) * 100 || 0}%`}}></div>
-                    <div className="h-full bg-[#ffdb58]" style={{width: `${(dashboardStats.macro['Em Tramitação'] / dashboardStats.total) * 100 || 0}%`}}></div>
-                    <div className="h-full bg-gray-500" style={{width: `${(dashboardStats.macro.Encerrados / dashboardStats.total) * 100 || 0}%`}}></div>
-                    <div className="h-full bg-[#c41e3a]" style={{width: `${(dashboardStats.macro.Vetados / dashboardStats.total) * 100 || 0}%`}}></div>
+                    {barConfig.map(b => {
+                       const val = dashboardStats.macro[b.key] || 0;
+                       const pct = (val / dashboardStats.total) * 100 || 0;
+                       if (pct === 0) return null;
+                       return <div key={b.key} onClick={() => toggleMacroFilter(b.key)} className={`h-full ${b.color} cursor-pointer hover:brightness-110 border-r-[2px] border-black last:border-r-0`} style={{width: `${pct}%`}} title={`${b.key}: ${val}`}></div>
+                    })}
                   </div>
                 </div>
               </div>
@@ -388,18 +459,22 @@ export default function App() {
                       return pieData.map((slice) => {
                         if (slice.value === 0) return null;
                         const percent = (slice.value / total) * 100;
+                        if (percent === 100) {
+                           return <circle key={slice.name} onClick={() => toggleTipoFilter(slice.name)} cx="16" cy="16" r="15.91549430918954" fill="transparent" stroke={slice.color} strokeWidth="32" className="cursor-pointer hover:opacity-80 transition-opacity"><title>{slice.name}: {slice.value}</title></circle>
+                        }
                         const offset = -cumulativePercent;
                         cumulativePercent += percent;
                         return (
                           <circle
                             key={slice.name}
+                            onClick={() => toggleTipoFilter(slice.name)}
                             cx="16" cy="16" r="15.91549430918954"
                             fill="transparent"
                             stroke={slice.color}
                             strokeWidth="32"
                             strokeDasharray={`${percent} ${100 - percent}`}
                             strokeDashoffset={offset}
-                            className="transition-all duration-1000 ease-in-out hover:opacity-80 cursor-pointer"
+                            className={`transition-all duration-500 ease-in-out cursor-pointer hover:stroke-[30px] ${filters.tipo.includes(slice.name) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
                           >
                             <title>{slice.name}: {slice.value}</title>
                           </circle>
@@ -511,6 +586,7 @@ export default function App() {
           </div>
         )}
 
+        {}
         {!loading && !error && viewMode === 'card' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredData.map((item, index) => {
@@ -522,26 +598,33 @@ export default function App() {
               const vistaProp = getPedidoVista(item);
               const infoRelatoriaProp = getInformacaoRelatoria(item);
               
-              const linksAdicProp = getLinksAdicionais(item);
-              let parsedLinks = [];
-              try {
-                if (linksAdicProp && linksAdicProp !== '-') parsedLinks = JSON.parse(linksAdicProp);
-              } catch(e) {}
-
               const sitLower = (getSituacao(item) || '').toLowerCase();
               const ultMovLower = ultimoMovimentoProp.toLowerCase();
               const obsLower = obsProp.toLowerCase();
-              
-              // BLINDAGEM: Apenas processos (PL, PEC, etc) podem ser considerados Leis ou Vetos.
-              const prefix = numeroProp.split('/')[0].replace('.', '');
-              const isProcessoQueViraLei = ['PL', 'PEC', 'PLC', 'PDL', 'MPV'].includes(prefix);
 
-              const hasLeiLink = parsedLinks.some(l => l.label === "Lei Aprovada" || /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
-              const hasVetoLink = parsedLinks.some(l => l.label === "Veto" || l.label.toLowerCase().includes('veto') || l.url.includes('doe.sea.sc.gov.br'));
-              
-              const isAprovadoLei = isProcessoQueViraLei && (hasLeiLink || sitLower.includes('lei') || sitLower.includes('norma jurídica'));
-              const isVeto = isProcessoQueViraLei && (hasVetoLink || sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto'));
-              const isArquivado = sitLower.includes('arquivad') || sitLower.includes('retirado') || sitLower.includes('rejeitado') || sitLower.includes('concluíd') || isAprovadoLei;
+              const prefix = numeroProp.split('/')[0].replace('.', '');
+              const isProcesso = ['PL', 'PEC', 'PLC', 'PDL', 'PRC', 'MPV', 'VET', 'MSG', 'PSA'].includes(prefix);
+
+              let parsedLinks = [];
+              try {
+                const rawLinks = getLinksAdicionais(item);
+                if (rawLinks && rawLinks !== '-') parsedLinks = JSON.parse(rawLinks);
+              } catch(e) {}
+
+              let isVeto = false;
+              let isAprovadoLei = false;
+
+              if (isProcesso) {
+                 const temPalavraVeto = sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto');
+                 const temLinkVeto = parsedLinks.some(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
+                 if (temPalavraVeto || temLinkVeto) isVeto = true;
+
+                 const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica');
+                 const temLinkLei = parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+                 if ((temPalavraLei || temLinkLei) && !isVeto) isAprovadoLei = true;
+              }
+
+              const isArquivado = sitLower.includes('arquivad') || sitLower.includes('retirado') || sitLower.includes('rejeitado') || sitLower.includes('concluíd') || isAprovadoLei || isVeto;
 
               let boxColorClass = 'bg-[#ffdb58]/30 text-black border-black';
               let titleColorClass = 'text-black';
@@ -550,7 +633,12 @@ export default function App() {
               
               let textoCaixa = formatarUltimoMovimento(ultimoMovimentoProp);
 
-              if (vistaProp) {
+              if (isVeto) {
+                boxColorClass = 'bg-[#c41e3a] text-white border-black';
+                titleColorClass = 'text-white';
+                boxTitle = 'PROJETO VETADO';
+                iconeCaixa = <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
+              } else if (vistaProp) {
                 boxColorClass = 'bg-[#c41e3a] text-white border-black';
                 titleColorClass = 'text-white';
                 boxTitle = 'Pedido de Vista Ativo';
@@ -558,7 +646,7 @@ export default function App() {
                 textoCaixa = `Vista de ${vistaProp}`;
               } else {
                 const textoLower = textoCaixa.toLowerCase();
-                if (isArquivado || sitLower.includes('concluíd') || sitLower.includes('aprovad') || textoLower.includes('aprovado por unanimidade')) {
+                if (isAprovadoLei || sitLower.includes('concluíd') || sitLower.includes('aprovad') || textoLower.includes('aprovado por unanimidade')) {
                    boxColorClass = 'bg-[#008080] text-white border-black';
                    titleColorClass = 'text-white';
                    if (textoLower.includes('diligência') && !sitLower.includes('concluíd') && !isArquivado) {
@@ -566,6 +654,10 @@ export default function App() {
                        titleColorClass = 'text-black';
                    }
                 } 
+                else if (isArquivado) {
+                   boxColorClass = 'bg-gray-500 text-white border-black';
+                   titleColorClass = 'text-white';
+                }
                 else if (sitLower.includes('aguardando') || sitLower.includes('comissão') || textoLower.includes('aguardando') || textoLower.includes('diligência')) {
                    boxColorClass = 'bg-[#ffdb58] text-black border-black';
                    titleColorClass = 'text-black';
@@ -676,30 +768,22 @@ export default function App() {
                           </p>
                         )}
 
-                        {parsedLinks.length > 0 && isProcessoQueViraLei && (
+                        {parsedLinks.length > 0 && isProcesso && (
                           <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t-[3px] border-black border-dashed">
                             {(() => {
                               let linkToRender = null;
-                              let linkType = '';
-
+                              
                               if (isVeto) {
-                                  const exactVeto = parsedLinks.find(l => l.label === "Veto" || l.label.toLowerCase().includes('veto'));
-                                  const doeVeto = parsedLinks.slice().reverse().find(l => l.url.includes('doe.sea.sc.gov.br'));
-                                  linkToRender = exactVeto || doeVeto || parsedLinks[parsedLinks.length - 1];
-                                  linkType = 'veto';
+                                  // Preferencia à URL do Diario Oficial do Veto extraida
+                                  const exato = parsedLinks.find(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
+                                  linkToRender = exato || parsedLinks[parsedLinks.length - 1];
+                                  if(linkToRender) return <a href={linkToRender.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-2 border-black px-2 py-1 flex items-center gap-1 hover:bg-red-800 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">VETO (DIÁRIO OFICIAL)</a>;
                               } else if (isAprovadoLei) {
-                                  const exactLei = parsedLinks.find(l => l.label === "Lei Aprovada" || /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
-                                  linkToRender = exactLei || parsedLinks[parsedLinks.length - 1];
-                                  linkType = 'lei';
+                                  const exato = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+                                  linkToRender = exato || parsedLinks[parsedLinks.length - 1];
+                                  if(linkToRender) return <a href={linkToRender.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-2 border-black px-2 py-1 flex items-center gap-1 hover:bg-[#0097a7] transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</a>;
                               }
-
-                              if (!linkToRender) return null;
-
-                              if (linkType === 'veto') {
-                                  return <a href={linkToRender.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-2 border-black px-2 py-1 flex items-center gap-1 hover:bg-red-800 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">VETO (DIÁRIO OFICIAL)</a>;
-                              } else {
-                                  return <a href={linkToRender.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-2 border-black px-2 py-1 flex items-center gap-1 hover:bg-[#0097a7] transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</a>;
-                              }
+                              return null;
                             })()}
                           </div>
                         )}
@@ -712,6 +796,7 @@ export default function App() {
           </div>
         )}
 
+        {}
         {!loading && !error && viewMode === 'list' && (
           <div className="flex flex-col gap-4">
             {filteredData.map((item, index) => {
@@ -721,47 +806,60 @@ export default function App() {
               const obsProp = getObservacoes(item);
               const linkProp = getLink(item);
               const vistaProp = getPedidoVista(item);
-              const infoRelatoriaProp = getInformacaoRelatoria(item);
               
-              const linksAdicProp = getLinksAdicionais(item);
-              let parsedLinks = [];
-              try {
-                if (linksAdicProp && linksAdicProp !== '-') parsedLinks = JSON.parse(linksAdicProp);
-              } catch(e) {}
-
               const sitLower = (getSituacao(item) || '').toLowerCase();
               const ultMovLower = ultimoMovimentoProp.toLowerCase();
               const obsLower = obsProp.toLowerCase();
 
               const prefix = numeroProp.split('/')[0].replace('.', '');
-              const isProcessoQueViraLei = ['PL', 'PEC', 'PLC', 'PDL', 'MPV'].includes(prefix);
+              const isProcesso = ['PL', 'PEC', 'PLC', 'PDL', 'PRC', 'MPV', 'VET', 'MSG', 'PSA'].includes(prefix);
 
-              const hasLeiLink = parsedLinks.some(l => l.label === "Lei Aprovada" || /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
-              const hasVetoLink = parsedLinks.some(l => l.label === "Veto" || l.label.toLowerCase().includes('veto') || l.url.includes('doe.sea.sc.gov.br'));
+              let parsedLinks = [];
+              try {
+                const rawLinks = getLinksAdicionais(item);
+                if (rawLinks && rawLinks !== '-') parsedLinks = JSON.parse(rawLinks);
+              } catch(e) {}
 
-              const isAprovadoLei = isProcessoQueViraLei && (hasLeiLink || sitLower.includes('lei') || sitLower.includes('norma jurídica'));
-              const isVeto = isProcessoQueViraLei && (hasVetoLink || sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto'));
-              const isArquivado = sitLower.includes('arquivad') || sitLower.includes('retirado') || sitLower.includes('rejeitado') || sitLower.includes('concluíd') || isAprovadoLei;
+              let isVeto = false;
+              let isAprovadoLei = false;
+
+              if (isProcesso) {
+                 const temPalavraVeto = sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto');
+                 const temLinkVeto = parsedLinks.some(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
+                 if (temPalavraVeto || temLinkVeto) isVeto = true;
+
+                 const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica');
+                 const temLinkLei = parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+                 if ((temPalavraLei || temLinkLei) && !isVeto) isAprovadoLei = true;
+              }
+
+              const isArquivado = sitLower.includes('arquivad') || sitLower.includes('retirado') || sitLower.includes('rejeitado') || sitLower.includes('concluíd') || isAprovadoLei || isVeto;
 
               let boxColorClass = 'bg-white text-black';
               let titleColorClass = 'text-black';
               let boxTitle = 'Último Movimento';
               let textoCaixa = formatarUltimoMovimento(ultimoMovimentoProp);
 
-              if (vistaProp) {
+              if (isVeto) {
+                boxColorClass = 'bg-[#c41e3a] text-white';
+                titleColorClass = 'text-white';
+                boxTitle = 'PROJETO VETADO';
+              } else if (vistaProp) {
                 boxColorClass = 'bg-[#c41e3a] text-white';
                 titleColorClass = 'text-white';
                 boxTitle = 'Pedido de Vista';
                 textoCaixa = `Vista de ${vistaProp}`;
               } else {
                 const textoLower = textoCaixa.toLowerCase();
-                if (isArquivado || sitLower.includes('concluíd') || sitLower.includes('aprovad') || textoLower.includes('aprovado por unanimidade')) {
+                if (isAprovadoLei || sitLower.includes('concluíd') || sitLower.includes('aprovad') || textoLower.includes('aprovado por unanimidade')) {
                    boxColorClass = 'bg-[#008080] text-white';
                    titleColorClass = 'text-white';
                    if (textoLower.includes('diligência') && !sitLower.includes('concluíd') && !isArquivado) {
                        boxColorClass = 'bg-[#ffdb58] text-black';
                        titleColorClass = 'text-black';
                    }
+                } else if (isArquivado) {
+                   boxColorClass = 'bg-gray-200 text-black';
                 } else if (sitLower.includes('aguardando') || sitLower.includes('comissão') || textoLower.includes('aguardando') || textoLower.includes('diligência')) {
                    boxColorClass = 'bg-[#ffdb58] text-black';
                    titleColorClass = 'text-black';
@@ -830,30 +928,21 @@ export default function App() {
                           </p>
                         )}
 
-                        {parsedLinks.length > 0 && isProcessoQueViraLei && (
+                        {parsedLinks.length > 0 && isProcesso && (
                           <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t-[2px] border-black border-dashed">
                             {(() => {
                               let linkToRender = null;
-                              let linkType = '';
 
                               if (isVeto) {
-                                  const exactVeto = parsedLinks.find(l => l.label === "Veto" || l.label.toLowerCase().includes('veto'));
-                                  const doeVeto = parsedLinks.slice().reverse().find(l => l.url.includes('doe.sea.sc.gov.br'));
-                                  linkToRender = exactVeto || doeVeto || parsedLinks[parsedLinks.length - 1];
-                                  linkType = 'veto';
+                                  const exato = parsedLinks.find(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
+                                  linkToRender = exato || parsedLinks[parsedLinks.length - 1];
+                                  if(linkToRender) return <a href={linkToRender.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[8px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:bg-red-800">VETO (DIÁRIO OFICIAL)</a>;
                               } else if (isAprovadoLei) {
-                                  const exactLei = parsedLinks.find(l => l.label === "Lei Aprovada" || /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
-                                  linkToRender = exactLei || parsedLinks[parsedLinks.length - 1];
-                                  linkType = 'lei';
+                                  const exato = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+                                  linkToRender = exato || parsedLinks[parsedLinks.length - 1];
+                                  if(linkToRender) return <a href={linkToRender.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[8px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:bg-[#0097a7]">LEI APROVADA</a>;
                               }
-
-                              if (!linkToRender) return null;
-
-                              if (linkType === 'veto') {
-                                  return <a href={linkToRender.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[8px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:bg-red-800">VETO (DIÁRIO OFICIAL)</a>;
-                              } else {
-                                  return <a href={linkToRender.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[8px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:bg-[#0097a7]">LEI APROVADA</a>;
-                              }
+                              return null;
                             })()}
                           </div>
                         )}
@@ -873,6 +962,7 @@ export default function App() {
           </div>
         )}
 
+        {}
         {selectedItem && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setSelectedItem(null)}>
             <div className="bg-white border-[6px] border-black shadow-[12px_12px_0px_0px_rgba(255,219,88,1)] w-full max-w-4xl max-h-[90vh] flex flex-col relative" onClick={e => e.stopPropagation()}>
@@ -933,12 +1023,31 @@ export default function App() {
                   <div className="flex flex-col gap-6 border-[3px] border-black border-dashed p-4">
                     {(() => {
                       const sitLowerModal = (getSituacao(selectedItem) || '').toLowerCase();
-                      const linksAdicProp = getLinksAdicionais(selectedItem);
-                      let parsedLinks = [];
-                      try { if (linksAdicProp && linksAdicProp !== '-') parsedLinks = JSON.parse(linksAdicProp); } catch(e) {}
-                      let leiLinkModal = parsedLinks.find(l => /\blei\b/i.test(l.label.toLowerCase()) || l.label.toLowerCase().includes('promulgad'));
+                      const ultMovLowerModal = (getUltimoMovimento(selectedItem) || '').toLowerCase();
+                      const obsLowerModal = (getObservacoes(selectedItem) || '').toLowerCase();
+                      const prefixModal = getNumero(selectedItem).split('/')[0].replace('.', '');
+                      const isProcessoModal = ['PL', 'PEC', 'PLC', 'PDL', 'PRC', 'MPV', 'VET', 'MSG', 'PSA'].includes(prefixModal);
 
-                      const isArquivadoModal = sitLowerModal.includes('arquivad') || sitLowerModal.includes('veto') || sitLowerModal.includes('lei') || sitLowerModal.includes('norma jurídica') || sitLowerModal.includes('retirado') || sitLowerModal.includes('rejeitado') || leiLinkModal;
+                      let parsedLinks = [];
+                      try {
+                        const rawLinks = getLinksAdicionais(selectedItem);
+                        if (rawLinks && rawLinks !== '-') parsedLinks = JSON.parse(rawLinks);
+                      } catch(e) {}
+
+                      let isVetoModal = false;
+                      let isAprovadoLeiModal = false;
+
+                      if (isProcessoModal) {
+                         const temPalavraVeto = sitLowerModal.includes('veto') || ultMovLowerModal.includes('veto') || obsLowerModal.includes('veto');
+                         const temLinkVeto = parsedLinks.some(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
+                         if (temPalavraVeto || temLinkVeto) isVetoModal = true;
+
+                         const temPalavraLei = sitLowerModal.includes('lei') || sitLowerModal.includes('norma jurídica');
+                         const temLinkLei = parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+                         if ((temPalavraLei || temLinkLei) && !isVetoModal) isAprovadoLeiModal = true;
+                      }
+
+                      const isArquivadoModal = sitLowerModal.includes('arquivad') || sitLowerModal.includes('retirado') || sitLowerModal.includes('rejeitado') || sitLowerModal.includes('concluíd') || isAprovadoLeiModal || isVetoModal;
                       
                       return !isArquivadoModal ? (
                         <>
@@ -1003,46 +1112,37 @@ export default function App() {
                     const rawLinks = getLinksAdicionais(selectedItem);
                     if (rawLinks && rawLinks !== '-') parsedLinks = JSON.parse(rawLinks);
                   } catch(e) {}
+                  
+                  const prefixModal = getNumero(selectedItem).split('/')[0].replace('.', '');
+                  const isProcessoModal = ['PL', 'PEC', 'PLC', 'PDL', 'PRC', 'MPV', 'VET', 'MSG', 'PSA'].includes(prefixModal);
 
-                  const sitLower = (getSituacao(selectedItem) || '').toLowerCase();
-                  const ultMovLower = (getUltimoMovimento(selectedItem) || '').toLowerCase();
-                  const obsLower = (getObservacoes(selectedItem) || '').toLowerCase();
-                  
-                  const prefix = getNumero(selectedItem).split('/')[0].replace('.', '');
-                  const isProcessoQueViraLei = ['PL', 'PEC', 'PLC', 'PDL', 'MPV'].includes(prefix);
-                  
-                  const hasLeiLink = parsedLinks.some(l => l.label === "Lei Aprovada" || /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
-                  const hasVetoLink = parsedLinks.some(l => l.label === "Veto" || l.label.toLowerCase().includes('veto') || l.url.includes('doe.sea.sc.gov.br'));
-                  
-                  const isAprovadoLei = isProcessoQueViraLei && (hasLeiLink || sitLower.includes('lei') || sitLower.includes('norma jurídica'));
-                  const isVeto = isProcessoQueViraLei && (hasVetoLink || sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto'));
-                  
-                  if (parsedLinks.length > 0 && isProcessoQueViraLei) {
-                    let linkToRender = null;
-                    let linkType = '';
+                  if (parsedLinks.length > 0 && isProcessoModal) {
+                      const sitLowerModal = (getSituacao(selectedItem) || '').toLowerCase();
+                      const ultMovLowerModal = (getUltimoMovimento(selectedItem) || '').toLowerCase();
+                      const obsLowerModal = (getObservacoes(selectedItem) || '').toLowerCase();
+                      
+                      let isVetoModal = false;
+                      let isAprovadoLeiModal = false;
+                      
+                      const temPalavraVeto = sitLowerModal.includes('veto') || ultMovLowerModal.includes('veto') || obsLowerModal.includes('veto');
+                      const temLinkVeto = parsedLinks.some(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
+                      if (temPalavraVeto || temLinkVeto) isVetoModal = true;
+                      
+                      const temPalavraLei = sitLowerModal.includes('lei') || sitLowerModal.includes('norma jurídica');
+                      const temLinkLei = parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+                      if ((temPalavraLei || temLinkLei) && !isVetoModal) isAprovadoLeiModal = true;
 
-                    if (isVeto) {
-                        const exactVeto = parsedLinks.find(l => l.label === "Veto" || l.label.toLowerCase().includes('veto'));
-                        const doeVeto = parsedLinks.slice().reverse().find(l => l.url.includes('doe.sea.sc.gov.br'));
-                        linkToRender = exactVeto || doeVeto || parsedLinks[parsedLinks.length - 1];
-                        linkType = 'veto';
-                    } else if (isAprovadoLei) {
-                        const exactLei = parsedLinks.find(l => l.label === "Lei Aprovada" || /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
-                        linkToRender = exactLei || parsedLinks[parsedLinks.length - 1];
-                        linkType = 'lei';
-                    }
-
-                    if (linkToRender) {
-                      return (
-                        <div className="pt-4 border-t-[3px] border-black border-dashed flex flex-wrap gap-3">
-                          {linkType === 'veto' ? (
-                              <a href={linkToRender.url} target="_blank" rel="noreferrer" className="text-xs font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[3px] border-black px-4 py-2 flex items-center gap-2 hover:bg-red-800 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform hover:-translate-y-1">VETO (DIÁRIO OFICIAL)</a>
-                          ) : (
-                              <a href={linkToRender.url} target="_blank" rel="noreferrer" className="text-xs font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[3px] border-black px-4 py-2 flex items-center gap-2 hover:bg-[#0097a7] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform hover:-translate-y-1"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</a>
-                          )}
-                        </div>
-                      );
-                    }
+                      let linkToRender = null;
+                      
+                      if (isVetoModal) {
+                          const exato = parsedLinks.find(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
+                          linkToRender = exato || parsedLinks[parsedLinks.length - 1];
+                          if(linkToRender) return <div className="pt-4 border-t-[3px] border-black border-dashed flex flex-wrap gap-3"><a href={linkToRender.url} target="_blank" rel="noreferrer" className="text-xs font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[3px] border-black px-4 py-2 flex items-center gap-2 hover:bg-red-800 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform hover:-translate-y-1">VETO (DIÁRIO OFICIAL)</a></div>;
+                      } else if (isAprovadoLeiModal) {
+                          const exato = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+                          linkToRender = exato || parsedLinks[parsedLinks.length - 1];
+                          if(linkToRender) return <div className="pt-4 border-t-[3px] border-black border-dashed flex flex-wrap gap-3"><a href={linkToRender.url} target="_blank" rel="noreferrer" className="text-xs font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[3px] border-black px-4 py-2 flex items-center gap-2 hover:bg-[#0097a7] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform hover:-translate-y-1"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</a></div>;
+                      }
                   }
                   return null;
                 })()}

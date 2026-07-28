@@ -69,27 +69,6 @@ export default function App() {
       return item['Links Adicionais'] || item['links_adicionais'] || item['Links adicionais'] || '';
   };
 
-  const getMacroSituacao = (situacao, linksAdicionais, ultimoMovimento, observacoes) => {
-    const s = (situacao || '').toLowerCase();
-    const u = (ultimoMovimento || '').toLowerCase();
-    const o = (observacoes || '').toLowerCase();
-    let hasVeto = false;
-    let hasLei = false;
-    try {
-        if (linksAdicionais && linksAdicionais !== '-') {
-            const parsed = JSON.parse(linksAdicionais);
-            hasVeto = parsed.some(l => l.label.toLowerCase().includes('veto'));
-            hasLei = parsed.some(l => l.label.toLowerCase().includes('lei') || l.label.toLowerCase().includes('promulgad'));
-        }
-    } catch(e){}
-
-    if (hasLei || s.includes('lei') || s.includes('norma jurídica')) return 'Aprovados';
-    // O veto precisa estar EXPLICITAMENTE escrito nos campos, nada de deduzir por link de Diário Oficial.
-    if (hasVeto || s.includes('veto') || s.includes('vetad') || u.includes('veto total') || u.includes('veto parcial') || o.includes('veto')) return 'Vetados';
-    if (s.includes('arquivad') || s.includes('rejeitad') || s.includes('retirad') || s.includes('concluíd')) return 'Encerrados';
-    return 'Em Tramitação';
-  };
-
   const API_URL = (() => {
     try {
       if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) {
@@ -174,15 +153,14 @@ export default function App() {
       const emenLower = getEmenta(item).toLowerCase();
       
       const linksAdicProp = getLinksAdicionais(item);
-      let isAprovadaPorLink = false;
-      try {
-        if (linksAdicProp && linksAdicProp !== '-') {
-           const parsedLinks = JSON.parse(linksAdicProp);
-           isAprovadaPorLink = parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
-        }
-      } catch(e) {}
+      let parsedLinks = [];
+      try { if (linksAdicProp && linksAdicProp !== '-') parsedLinks = JSON.parse(linksAdicProp); } catch(e) {}
       
-      const isAprovadoLei = isAprovadaPorLink || sitLower.includes('lei') || sitLower.includes('norma jurídica');
+      // BLINDAGEM DE PROCESSOS: Só consideramos Aprovado/Vetado se a sigla fizer parte de Processo Legislativo
+      const isProcessoQueViraLei = ['PL', 'PEC', 'PLC', 'PDL', 'MPV'].includes(prefix);
+
+      const hasLeiLink = parsedLinks.some(l => l.label === "Lei Aprovada" || /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+      const isAprovadoLei = isProcessoQueViraLei && (hasLeiLink || sitLower.includes('lei') || sitLower.includes('norma jurídica'));
 
       if (toggleAprovadas && !isAprovadoLei) return false;
       if (toggleUtilidade && !emenLower.includes('utilidade pública')) return false;
@@ -230,7 +208,37 @@ export default function App() {
     };
 
     filtered.forEach(item => {
-      stats.macro[getMacroSituacao(getSituacao(item), getLinksAdicionais(item), getUltimoMovimento(item), getObservacoes(item))]++;
+      const prefix = (getNumero(item).toUpperCase() || '').split('/')[0].replace('.', '');
+      const isProcessoQueViraLei = ['PL', 'PEC', 'PLC', 'PDL', 'MPV'].includes(prefix);
+      const s = getSituacao(item).toLowerCase();
+      const u = getUltimoMovimento(item).toLowerCase();
+      const o = getObservacoes(item).toLowerCase();
+
+      let parsedLinks = [];
+      try { 
+        const links = getLinksAdicionais(item);
+        if (links && links !== '-') parsedLinks = JSON.parse(links); 
+      } catch(e) {}
+
+      let hasLei = false;
+      let hasVeto = false;
+      
+      if (parsedLinks.length > 0) {
+         hasLei = parsedLinks.some(l => l.label === "Lei Aprovada" || /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+         hasVeto = parsedLinks.some(l => l.label === "Veto" || l.label.toLowerCase().includes('veto'));
+      }
+
+      let macro = 'Em Tramitação';
+      
+      if (isProcessoQueViraLei) {
+          if (hasLei || s.includes('lei') || s.includes('norma jurídica')) macro = 'Aprovados';
+          else if (hasVeto || s.includes('veto') || /\bveto\b/.test(u) || /\bveto\b/.test(o)) macro = 'Vetados';
+          else if (s.includes('arquivad') || s.includes('rejeitad') || s.includes('retirad') || s.includes('concluíd')) macro = 'Encerrados';
+      } else {
+          if (s.includes('arquivad') || s.includes('rejeitad') || s.includes('retirad') || s.includes('concluíd')) macro = 'Encerrados';
+      }
+
+      stats.macro[macro]++;
       const tipo = getTipoProposicao(item);
       stats.tipos[tipo] = (stats.tipos[tipo] || 0) + 1;
     });
@@ -510,12 +518,16 @@ export default function App() {
               const sitLower = (getSituacao(item) || '').toLowerCase();
               const ultMovLower = ultimoMovimentoProp.toLowerCase();
               const obsLower = obsProp.toLowerCase();
-
-              const hasLeiLink = parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
-              const hasVetoLink = parsedLinks.some(l => l.label.toLowerCase().includes('veto'));
               
-              const isAprovadoLei = hasLeiLink || sitLower.includes('lei') || sitLower.includes('norma jurídica');
-              const isVeto = hasVetoLink || sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto');
+              // BLINDAGEM: Apenas processos (PL, PEC, etc) podem ser considerados Leis ou Vetos.
+              const prefix = numeroProp.split('/')[0].replace('.', '');
+              const isProcessoQueViraLei = ['PL', 'PEC', 'PLC', 'PDL', 'MPV'].includes(prefix);
+
+              const hasLeiLink = parsedLinks.some(l => l.label === "Lei Aprovada" || /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+              const hasVetoLink = parsedLinks.some(l => l.label === "Veto" || l.label.toLowerCase().includes('veto') || l.url.includes('doe.sea.sc.gov.br'));
+              
+              const isAprovadoLei = isProcessoQueViraLei && (hasLeiLink || sitLower.includes('lei') || sitLower.includes('norma jurídica'));
+              const isVeto = isProcessoQueViraLei && (hasVetoLink || sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto'));
               const isArquivado = sitLower.includes('arquivad') || sitLower.includes('retirado') || sitLower.includes('rejeitado') || sitLower.includes('concluíd') || isAprovadoLei;
 
               let boxColorClass = 'bg-[#ffdb58]/30 text-black border-black';
@@ -549,18 +561,17 @@ export default function App() {
 
               return (
                 <div key={index} onClick={(e) => { if(!e.target.closest('a') && !e.target.closest('button') && !e.target.closest('textarea')) setSelectedItem(item); }} className="relative hover:-translate-y-1 transition-transform duration-200 cursor-pointer group flex flex-col h-full">
-                  <div className={`absolute inset-0 top-[6px] left-[6px] right-[-6px] bottom-[-6px] transition-all duration-200 group-hover:top-[10px] group-hover:left-[10px] group-hover:right-[-10px] group-hover:bottom-[-10px] ${isAprovadoLei ? 'bg-gradient-to-br from-[#c41e3a] via-[#ffdb58] to-[#008080]' : (isVeto ? 'bg-[#c41e3a]' : 'bg-black')}`}></div>
+                  <div className={`absolute inset-0 top-[6px] left-[6px] right-[-6px] bottom-[-6px] transition-all duration-200 group-hover:top-[10px] group-hover:left-[10px] group-hover:right-[-10px] group-hover:bottom-[-10px] ${isAprovadoLei ? 'bg-gradient-to-br from-[#c41e3a] via-[#ffdb58] to-[#008080]' : 'bg-black'}`}></div>
                   
                   <div className="relative z-10 bg-white border-[5px] border-black flex flex-col flex-grow">
-                    <div className={`border-b-[5px] border-black p-4 flex justify-between items-start ${isVeto && !isAprovadoLei ? 'bg-red-50' : 'bg-gray-100'}`}>
+                    <div className="border-b-[5px] border-black p-4 flex justify-between items-start bg-gray-100">
                       <div>
-                        <span className={`px-2 py-1 text-xs font-black tracking-widest uppercase ${isVeto && !isAprovadoLei ? 'bg-[#c41e3a] text-white' : 'bg-black text-white'}`}>
+                        <span className="bg-black text-white px-2 py-1 text-xs font-black tracking-widest uppercase">
                           {getTipoProposicao(item)}
                         </span>
                         <h3 className="text-3xl font-black mt-2 text-black">
                           {numeroProp}
                         </h3>
-                        {isVeto && !isAprovadoLei && <span className="text-[10px] font-black text-[#c41e3a] uppercase tracking-wider block mt-1">VETO REGISTRADO</span>}
                       </div>
                       {linkProp && linkProp !== '-' && (
                         <a href={linkProp} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="bg-white p-2 border-2 border-black hover:bg-gray-200 transition-colors" title="Ver na ALESC">
@@ -619,7 +630,7 @@ export default function App() {
                             </div>
                           </div>
                           {infoRelatoriaProp && (
-                            <p className="text-[13px] font-bold text-gray-600 italic leading-tight mt-1">
+                            <p className="text-[14px] font-bold text-gray-700 italic leading-tight mt-1">
                               {infoRelatoriaProp}
                             </p>
                           )}
@@ -652,22 +663,19 @@ export default function App() {
                           </p>
                         )}
 
-                        {parsedLinks.length > 0 && (
+                        {parsedLinks.length > 0 && isProcessoQueViraLei && (
                           <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t-[3px] border-black border-dashed">
                             {(() => {
                               let linkToRender = null;
                               let linkType = '';
 
                               if (isVeto) {
-                                  // Se tiver a palavra Veto, tenta encontrar o link nomeado Veto ou o último link válido para o DOE.
-                                  const exactVeto = parsedLinks.find(l => l.label.toLowerCase().includes('veto'));
+                                  const exactVeto = parsedLinks.find(l => l.label === "Veto" || l.label.toLowerCase().includes('veto'));
                                   const doeVeto = parsedLinks.slice().reverse().find(l => l.url.includes('doe.sea.sc.gov.br'));
                                   linkToRender = exactVeto || doeVeto || parsedLinks[parsedLinks.length - 1];
                                   linkType = 'veto';
-                              } 
-                              else if (isAprovadoLei) {
-                                  // Se for aprovado, pega o link de Promulgação/Lei ou o último disponível.
-                                  const exactLei = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+                              } else if (isAprovadoLei) {
+                                  const exactLei = parsedLinks.find(l => l.label === "Lei Aprovada" || /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
                                   linkToRender = exactLei || parsedLinks[parsedLinks.length - 1];
                                   linkType = 'lei';
                               }
@@ -712,11 +720,14 @@ export default function App() {
               const ultMovLower = ultimoMovimentoProp.toLowerCase();
               const obsLower = obsProp.toLowerCase();
 
-              const hasLeiLink = parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
-              const hasVetoLink = parsedLinks.some(l => l.label.toLowerCase().includes('veto'));
+              const prefix = numeroProp.split('/')[0].replace('.', '');
+              const isProcessoQueViraLei = ['PL', 'PEC', 'PLC', 'PDL', 'MPV'].includes(prefix);
 
-              const isAprovadoLei = hasLeiLink || sitLower.includes('lei') || sitLower.includes('norma jurídica');
-              const isVeto = hasVetoLink || sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto');
+              const hasLeiLink = parsedLinks.some(l => l.label === "Lei Aprovada" || /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+              const hasVetoLink = parsedLinks.some(l => l.label === "Veto" || l.label.toLowerCase().includes('veto') || l.url.includes('doe.sea.sc.gov.br'));
+
+              const isAprovadoLei = isProcessoQueViraLei && (hasLeiLink || sitLower.includes('lei') || sitLower.includes('norma jurídica'));
+              const isVeto = isProcessoQueViraLei && (hasVetoLink || sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto'));
               const isArquivado = sitLower.includes('arquivad') || sitLower.includes('retirado') || sitLower.includes('rejeitado') || sitLower.includes('concluíd') || isAprovadoLei;
 
               let boxColorClass = 'bg-white text-black';
@@ -748,14 +759,14 @@ export default function App() {
 
               return (
                 <div key={index} onClick={(e) => { if(!e.target.closest('a') && !e.target.closest('button') && !e.target.closest('textarea')) setSelectedItem(item); }} className="relative hover:-translate-y-1 transition-transform duration-200 cursor-pointer group flex flex-col md:flex-row h-full">
-                  <div className={`absolute inset-0 top-[4px] left-[4px] right-[-4px] bottom-[-4px] transition-all duration-200 group-hover:top-[6px] group-hover:left-[6px] group-hover:right-[-6px] group-hover:bottom-[-6px] ${isAprovadoLei ? 'bg-gradient-to-br from-[#c41e3a] via-[#ffdb58] to-[#008080]' : (isVeto ? 'bg-[#c41e3a]' : 'bg-black')}`}></div>
+                  <div className={`absolute inset-0 top-[4px] left-[4px] right-[-4px] bottom-[-4px] transition-all duration-200 group-hover:top-[6px] group-hover:left-[6px] group-hover:right-[-6px] group-hover:bottom-[-6px] ${isAprovadoLei ? 'bg-gradient-to-br from-[#c41e3a] via-[#ffdb58] to-[#008080]' : 'bg-black'}`}></div>
 
                   <div className="relative z-10 bg-white border-[4px] border-black flex flex-col md:flex-row flex-grow overflow-hidden">
-                    <div className={`w-full md:w-4 min-h-[1rem] md:min-h-full border-b-[4px] md:border-b-0 md:border-r-[4px] border-black flex-shrink-0 ${isVeto && !isAprovadoLei ? 'bg-[#c41e3a]' : 'bg-gray-200'}`}></div>
+                    <div className="w-full md:w-4 min-h-[1rem] md:min-h-full border-b-[4px] md:border-b-0 md:border-r-[4px] border-black flex-shrink-0 bg-gray-200"></div>
                     
                     <div className="p-4 flex-grow flex flex-col md:flex-row gap-6 items-start md:items-center">
                       <div className="flex flex-row md:flex-col gap-2 items-center md:items-start md:w-32 flex-shrink-0">
-                        <span className={`px-2 py-1 text-xs font-black tracking-widest uppercase ${isVeto && !isAprovadoLei ? 'bg-[#c41e3a] text-white' : 'bg-black text-white'}`}>
+                        <span className="bg-black text-white px-2 py-1 text-xs font-black tracking-widest uppercase">
                           {getTipoProposicao(item)}
                         </span>
                         <span className="text-sm font-black tracking-widest uppercase">
@@ -764,7 +775,6 @@ export default function App() {
                         {linkProp && linkProp !== '-' && (
                           <a href={linkProp} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] font-black uppercase underline hover:text-[#008080]">Ver na ALESC</a>
                         )}
-                        {isVeto && !isAprovadoLei && <span className="text-[9px] font-black text-[#c41e3a] uppercase tracking-wider block mt-1">VETO REGISTRADO</span>}
                       </div>
 
                       <div className="flex-grow grid grid-cols-1 md:grid-cols-12 gap-4 w-full">
@@ -807,19 +817,19 @@ export default function App() {
                           </p>
                         )}
 
-                        {parsedLinks.length > 0 && (
+                        {parsedLinks.length > 0 && isProcessoQueViraLei && (
                           <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t-[2px] border-black border-dashed">
                             {(() => {
                               let linkToRender = null;
                               let linkType = '';
 
                               if (isVeto) {
-                                  const exactVeto = parsedLinks.find(l => l.label.toLowerCase().includes('veto'));
+                                  const exactVeto = parsedLinks.find(l => l.label === "Veto" || l.label.toLowerCase().includes('veto'));
                                   const doeVeto = parsedLinks.slice().reverse().find(l => l.url.includes('doe.sea.sc.gov.br'));
                                   linkToRender = exactVeto || doeVeto || parsedLinks[parsedLinks.length - 1];
                                   linkType = 'veto';
                               } else if (isAprovadoLei) {
-                                  const exactLei = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+                                  const exactLei = parsedLinks.find(l => l.label === "Lei Aprovada" || /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
                                   linkToRender = exactLei || parsedLinks[parsedLinks.length - 1];
                                   linkType = 'lei';
                               }
@@ -924,7 +934,7 @@ export default function App() {
                               <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Relator(a) Atual</p>
                               <p className="text-[15px] font-black uppercase">{getRelator(selectedItem) || '-'}</p>
                               {getInformacaoRelatoria(selectedItem) && (
-                                <p className="text-[13px] font-bold text-gray-600 leading-tight italic mt-1">
+                                <p className="text-[14px] font-bold text-gray-700 leading-tight italic mt-1">
                                   {getInformacaoRelatoria(selectedItem)}
                                 </p>
                               )}
@@ -985,23 +995,26 @@ export default function App() {
                   const ultMovLower = (getUltimoMovimento(selectedItem) || '').toLowerCase();
                   const obsLower = (getObservacoes(selectedItem) || '').toLowerCase();
                   
-                  const hasLeiLink = parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
-                  const hasVetoLink = parsedLinks.some(l => l.label.toLowerCase().includes('veto'));
+                  const prefix = getNumero(selectedItem).split('/')[0].replace('.', '');
+                  const isProcessoQueViraLei = ['PL', 'PEC', 'PLC', 'PDL', 'MPV'].includes(prefix);
                   
-                  const isAprovadoLei = hasLeiLink || sitLower.includes('lei') || sitLower.includes('norma jurídica');
-                  const isVeto = hasVetoLink || sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto');
+                  const hasLeiLink = parsedLinks.some(l => l.label === "Lei Aprovada" || /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+                  const hasVetoLink = parsedLinks.some(l => l.label === "Veto" || l.label.toLowerCase().includes('veto') || l.url.includes('doe.sea.sc.gov.br'));
                   
-                  if (parsedLinks.length > 0) {
+                  const isAprovadoLei = isProcessoQueViraLei && (hasLeiLink || sitLower.includes('lei') || sitLower.includes('norma jurídica'));
+                  const isVeto = isProcessoQueViraLei && (hasVetoLink || sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto'));
+                  
+                  if (parsedLinks.length > 0 && isProcessoQueViraLei) {
                     let linkToRender = null;
                     let linkType = '';
 
                     if (isVeto) {
-                        const exactVeto = parsedLinks.find(l => l.label.toLowerCase().includes('veto'));
+                        const exactVeto = parsedLinks.find(l => l.label === "Veto" || l.label.toLowerCase().includes('veto'));
                         const doeVeto = parsedLinks.slice().reverse().find(l => l.url.includes('doe.sea.sc.gov.br'));
                         linkToRender = exactVeto || doeVeto || parsedLinks[parsedLinks.length - 1];
                         linkType = 'veto';
                     } else if (isAprovadoLei) {
-                        const exactLei = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+                        const exactLei = parsedLinks.find(l => l.label === "Lei Aprovada" || /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
                         linkToRender = exactLei || parsedLinks[parsedLinks.length - 1];
                         linkType = 'lei';
                     }

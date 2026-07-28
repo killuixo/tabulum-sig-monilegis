@@ -71,24 +71,21 @@ export default function App() {
       return item['Links Adicionais'] || item['links_adicionais'] || item['Links adicionais'] || '';
   };
 
-  const getMacroSituacao = (item) => {
-    const s = (getSituacao(item) || '').toLowerCase();
-    const mov = (getUltimoMovimento(item) || '').toLowerCase();
-    const obs = (getObservacoes(item) || '').toLowerCase();
-
-    let hasLeiLink = false;
-    let hasVetoLink = false;
+  const getMacroSituacao = (situacao, linksAdicionais, ultimoMovimento) => {
+    const s = (situacao || '').toLowerCase();
+    const u = (ultimoMovimento || '').toLowerCase();
+    let hasVeto = false;
+    let hasLei = false;
     try {
-        const links = getLinksAdicionais(item);
-        if (links && links !== '-') {
-            const parsed = JSON.parse(links);
-            hasLeiLink = parsed.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
-            hasVetoLink = parsed.some(l => l.label.toLowerCase().includes('veto') || (l.url && l.url.includes('doe.sea.sc.gov.br') && mov.includes('veto')));
+        if (linksAdicionais && linksAdicionais !== '-') {
+            const parsed = JSON.parse(linksAdicionais);
+            hasVeto = parsed.some(l => l.label.toLowerCase().includes('veto'));
+            hasLei = parsed.some(l => l.label.toLowerCase().includes('lei') || l.label.toLowerCase().includes('promulgad'));
         }
-    } catch(e) {}
+    } catch(e){}
 
-    if (hasLeiLink || s.includes('lei') || s.includes('norma jurídica') || obs.includes('transformada em norma')) return 'Aprovados';
-    if (hasVetoLink || s.includes('veto') || s.includes('vetad') || mov.includes('veto') || obs.includes('veto')) return 'Vetados';
+    if (hasLei || s.includes('lei') || s.includes('norma jurídica')) return 'Aprovados';
+    if (hasVeto || s.includes('veto') || s.includes('vetad') || u.includes('veto total') || u.includes('veto parcial')) return 'Vetados';
     if (s.includes('arquivad') || s.includes('rejeitad') || s.includes('retirad') || s.includes('concluíd')) return 'Encerrados';
     return 'Em Tramitação';
   };
@@ -168,7 +165,6 @@ export default function App() {
       if (!num) return false;
 
       const prefix = num.split('/')[0].replace('.', ''); 
-      // PSA INCLUÍDO AQUI
       const processoPrefixes = ['PL', 'PEC', 'PLC', 'PDL', 'PRC', 'MPV', 'VET', 'MSG', 'PSA'];
       const isProcesso = processoPrefixes.includes(prefix);
       if (activeTab === 'processo' && !isProcesso) return false;
@@ -214,8 +210,8 @@ export default function App() {
 
     const baseDataForFilters = data.filter(item => {
       const prefix = (getNumero(item).toUpperCase() || '').split('/')[0].replace('.', ''); 
-      // PSA INCLUÍDO AQUI
-      const isProcesso = ['PL', 'PEC', 'PLC', 'PDL', 'PRC', 'MPV', 'VET', 'MSG', 'PSA'].includes(prefix);
+      const processoPrefixes = ['PL', 'PEC', 'PLC', 'PDL', 'PRC', 'MPV', 'VET', 'MSG', 'PSA'];
+      const isProcesso = processoPrefixes.includes(prefix);
       return activeTab === 'processo' ? isProcesso : !isProcesso;
     });
 
@@ -234,7 +230,7 @@ export default function App() {
     };
 
     filtered.forEach(item => {
-      stats.macro[getMacroSituacao(item)]++;
+      stats.macro[getMacroSituacao(getSituacao(item), getLinksAdicionais(item), getUltimoMovimento(item))]++;
       const tipo = getTipoProposicao(item);
       stats.tipos[tipo] = (stats.tipos[tipo] || 0) + 1;
     });
@@ -312,6 +308,7 @@ export default function App() {
           </button>
         </div>
 
+        {}
         <div className="flex flex-col lg:flex-row gap-6 mb-6">
           <div className="flex flex-col gap-3 lg:w-1/3">
             <button 
@@ -369,6 +366,7 @@ export default function App() {
           </div>
         </div>
 
+        {}
         {showFilters && (
           <div className="mb-6 p-6 border-[4px] border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
             <div className="flex justify-between items-center mb-4 border-b-[3px] border-black pb-2">
@@ -429,6 +427,7 @@ export default function App() {
           </div>
         )}
 
+        {}
         <div className="flex flex-col md:flex-row gap-4 mb-8">
           <div className="flex-1 relative flex border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white focus-within:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] focus-within:-translate-y-0.5 transition-all">
             <div className={`w-4 border-r-[4px] border-black ${activeTab === 'processo' ? MONDRIAN_COLORS[0] : MONDRIAN_COLORS[1]}`}></div>
@@ -451,6 +450,7 @@ export default function App() {
           </div>
         </div>
 
+        {}
         {loading && (
           <div className="text-center p-20 border-[6px] border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
             <h2 className="text-3xl font-black uppercase animate-pulse">A Carregar Dados...</h2>
@@ -467,6 +467,7 @@ export default function App() {
           </div>
         )}
 
+        {}
         {!loading && !error && viewMode === 'card' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredData.map((item, index) => {
@@ -485,14 +486,12 @@ export default function App() {
               } catch(e) {}
 
               const sitLower = (getSituacao(item) || '').toLowerCase();
-              const ultMovLower = ultimoMovimentoProp.toLowerCase();
-              const obsLower = obsProp.toLowerCase();
-              
               let leiLink = parsedLinks.find(l => /\blei\b/i.test(l.label.toLowerCase()) || l.label.toLowerCase().includes('promulgad'));
+              let vetoLink = parsedLinks.find(l => l.label.toLowerCase().includes('veto'));
               
-              let isVetado = sitLower.includes('veto') || sitLower.includes('vetad') || ultMovLower.includes('veto') || obsLower.includes('veto');
               const isAprovadoLei = leiLink || sitLower.includes('lei') || sitLower.includes('norma jurídica');
-              const isArquivado = sitLower.includes('arquivad') || isVetado || sitLower.includes('retirado') || sitLower.includes('rejeitado') || sitLower.includes('concluíd') || isAprovadoLei;
+              const isVeto = vetoLink || sitLower.includes('veto');
+              const isArquivado = sitLower.includes('arquivad') || sitLower.includes('retirado') || sitLower.includes('rejeitado') || sitLower.includes('concluíd') || isAprovadoLei;
 
               let boxColorClass = 'bg-[#ffdb58]/30 text-black border-black';
               let titleColorClass = 'text-black';
@@ -501,7 +500,12 @@ export default function App() {
               
               let textoCaixa = formatarUltimoMovimento(ultimoMovimentoProp);
 
-              if (vistaProp) {
+              if (isVeto) {
+                boxColorClass = 'bg-[#c41e3a] text-white border-black';
+                titleColorClass = 'text-white';
+                boxTitle = 'Projeto Vetado';
+                iconeCaixa = <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
+              } else if (vistaProp) {
                 boxColorClass = 'bg-[#c41e3a] text-white border-black';
                 titleColorClass = 'text-white';
                 boxTitle = 'Pedido de Vista Ativo';
@@ -594,7 +598,7 @@ export default function App() {
                             </div>
                           </div>
                           {infoRelatoriaProp && (
-                            <p className="text-[12px] font-bold text-gray-700 italic leading-tight mt-1">
+                            <p className="text-sm font-bold text-gray-600 italic leading-tight mt-1">
                               {infoRelatoriaProp}
                             </p>
                           )}
@@ -627,24 +631,13 @@ export default function App() {
                           </p>
                         )}
 
-                        {(parsedLinks.length > 0 || isVetado) && (
+                        {parsedLinks.length > 0 && (
                           <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t-[3px] border-black border-dashed">
                             {(() => {
-                              let diarioL = parsedLinks.find(l => l.label.toLowerCase().includes('diário'));
-                              let redacaoL = parsedLinks.find(l => l.label.toLowerCase().includes('redação'));
-                              let vetoL = parsedLinks.find(l => l.label.toLowerCase().includes('veto'));
-                              
-                              if (!vetoL && isVetado) {
-                                vetoL = parsedLinks.find(l => l.url && l.url.includes('doe.sea.sc.gov.br'));
-                              }
-
                               return (
                                 <>
                                   {leiLink && <a href={leiLink.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-2 border-black px-2 py-1 flex items-center gap-1 hover:bg-[#0097a7] transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</a>}
-                                  {diarioL && <a href={diarioL.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] font-black uppercase tracking-wider bg-black text-white border-2 border-black px-2 py-1 flex items-center gap-1 hover:bg-gray-800 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">DIÁRIO OFICIAL</a>}
-                                  {vetoL && <a href={vetoL.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-2 border-black px-2 py-1 flex items-center gap-1 hover:bg-red-800 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><polyline points="20 6 9 17 4 12"/></svg> VETO (DIÁRIO OFICIAL)</a>}
-                                  {!vetoL && isVetado && <span className="text-[10px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-2 border-black px-2 py-1 flex items-center gap-1 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">VETADO</span>}
-                                  {redacaoL && !leiLink && <a href={redacaoL.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[9px] font-bold uppercase tracking-wider bg-gray-100 text-gray-600 border-[1px] border-gray-400 px-2 py-1 hover:bg-gray-200 transition-colors">REDAÇÃO FINAL</a>}
+                                  {vetoLink && <a href={vetoLink.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-2 border-black px-2 py-1 flex items-center gap-1 hover:bg-red-800 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">VETO (DIÁRIO OFICIAL)</a>}
                                 </>
                               );
                             })()}
@@ -659,6 +652,7 @@ export default function App() {
           </div>
         )}
 
+        {}
         {!loading && !error && viewMode === 'list' && (
           <div className="flex flex-col gap-4">
             {filteredData.map((item, index) => {
@@ -677,21 +671,23 @@ export default function App() {
               } catch(e) {}
 
               const sitLower = (getSituacao(item) || '').toLowerCase();
-              const ultMovLower = ultimoMovimentoProp.toLowerCase();
-              const obsLower = obsProp.toLowerCase();
-
               let leiLink = parsedLinks.find(l => /\blei\b/i.test(l.label.toLowerCase()) || l.label.toLowerCase().includes('promulgad'));
+              let vetoLink = parsedLinks.find(l => l.label.toLowerCase().includes('veto'));
 
-              let isVetado = sitLower.includes('veto') || sitLower.includes('vetad') || ultMovLower.includes('veto') || obsLower.includes('veto');
               const isAprovadoLei = leiLink || sitLower.includes('lei') || sitLower.includes('norma jurídica');
-              const isArquivado = sitLower.includes('arquivad') || isVetado || sitLower.includes('retirado') || sitLower.includes('rejeitado') || sitLower.includes('concluíd') || isAprovadoLei;
+              const isVeto = vetoLink || sitLower.includes('veto');
+              const isArquivado = sitLower.includes('arquivad') || sitLower.includes('retirado') || sitLower.includes('rejeitado') || sitLower.includes('concluíd') || isAprovadoLei;
 
               let boxColorClass = 'bg-white text-black';
               let titleColorClass = 'text-black';
               let boxTitle = 'Último Movimento';
               let textoCaixa = formatarUltimoMovimento(ultimoMovimentoProp);
 
-              if (vistaProp) {
+              if (isVeto) {
+                boxColorClass = 'bg-[#c41e3a] text-white';
+                titleColorClass = 'text-white';
+                boxTitle = 'Projeto Vetado';
+              } else if (vistaProp) {
                 boxColorClass = 'bg-[#c41e3a] text-white';
                 titleColorClass = 'text-white';
                 boxTitle = 'Pedido de Vista';
@@ -773,24 +769,13 @@ export default function App() {
                           </p>
                         )}
 
-                        {(parsedLinks.length > 0 || isVetado) && (
+                        {parsedLinks.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t-[2px] border-black border-dashed">
                             {(() => {
-                              let diarioL = parsedLinks.find(l => l.label.toLowerCase().includes('diário'));
-                              let redacaoL = parsedLinks.find(l => l.label.toLowerCase().includes('redação'));
-                              let vetoL = parsedLinks.find(l => l.label.toLowerCase().includes('veto'));
-                              
-                              if (!vetoL && isVetado) {
-                                vetoL = parsedLinks.find(l => l.url && l.url.includes('doe.sea.sc.gov.br'));
-                              }
-
                               return (
                                 <>
                                   {leiLink && <a href={leiLink.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[8px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:bg-[#0097a7]">LEI APROVADA</a>}
-                                  {diarioL && <a href={diarioL.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[8px] font-black uppercase tracking-wider bg-black text-white border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:bg-gray-800">DIÁRIO OFICIAL</a>}
-                                  {vetoL && <a href={vetoL.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[8px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:bg-red-800">VETO (DO)</a>}
-                                  {!vetoL && isVetado && <span className="text-[8px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">VETADO</span>}
-                                  {redacaoL && !leiLink && <a href={redacaoL.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[8px] font-bold uppercase tracking-wider bg-gray-200 text-gray-600 border-[1px] border-gray-400 px-1.5 py-0.5 hover:bg-gray-300">REDAÇÃO FINAL</a>}
+                                  {vetoLink && <a href={vetoLink.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[8px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:bg-red-800">VETO (DIÁRIO OFICIAL)</a>}
                                 </>
                               );
                             })()}
@@ -805,6 +790,7 @@ export default function App() {
           </div>
         )}
         
+        {}
         {!loading && !error && filteredData.length === 0 && (
           <div className="text-center p-12 border-[5px] border-black bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
             <h3 className="text-2xl font-black uppercase">Nenhum resultado nesta aba.</h3>
@@ -839,15 +825,40 @@ export default function App() {
 
               <div className="p-6 md:p-8 flex flex-col gap-6 overflow-y-auto">
                 
-                <div className="border-[3px] border-black p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-[#ffdb58]">
-                  <p className="text-xs font-black text-black uppercase tracking-wider flex items-center gap-2 mb-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
-                    Último Movimento
-                  </p>
-                  <p className="text-lg font-black text-black leading-snug">
-                    {formatarUltimoMovimento(getUltimoMovimento(selectedItem)) || '-'}
-                  </p>
-                </div>
+                {(() => {
+                  const sitLowerModal = (getSituacao(selectedItem) || '').toLowerCase();
+                  const linksAdicProp = getLinksAdicionais(selectedItem);
+                  let parsedLinks = [];
+                  try { if (linksAdicProp && linksAdicProp !== '-') parsedLinks = JSON.parse(linksAdicProp); } catch(e) {}
+                  let vetoLinkModal = parsedLinks.find(l => l.label.toLowerCase().includes('veto'));
+                  const isVetoModal = vetoLinkModal || sitLowerModal.includes('veto');
+
+                  if (isVetoModal) {
+                    return (
+                      <div className="border-[3px] border-black p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-[#c41e3a]">
+                        <p className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2 mb-2">
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                          Projeto Vetado
+                        </p>
+                        <p className="text-lg font-black text-white leading-snug">
+                          {formatarUltimoMovimento(getUltimoMovimento(selectedItem)) || '-'}
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="border-[3px] border-black p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-[#ffdb58]">
+                      <p className="text-xs font-black text-black uppercase tracking-wider flex items-center gap-2 mb-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+                        Último Movimento
+                      </p>
+                      <p className="text-lg font-black text-black leading-snug">
+                        {formatarUltimoMovimento(getUltimoMovimento(selectedItem)) || '-'}
+                      </p>
+                    </div>
+                  );
+                })()}
 
                 <div className="border-[3px] border-black p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
                   <p className="text-xs font-black text-gray-500 uppercase tracking-wider mb-2">Ementa / Resumo</p>
@@ -877,8 +888,7 @@ export default function App() {
                       try { if (linksAdicProp && linksAdicProp !== '-') parsedLinks = JSON.parse(linksAdicProp); } catch(e) {}
                       let leiLinkModal = parsedLinks.find(l => /\blei\b/i.test(l.label.toLowerCase()) || l.label.toLowerCase().includes('promulgad'));
 
-                      const isVetadoModal = sitLowerModal.includes('veto') || sitLowerModal.includes('vetad') || (getUltimoMovimento(selectedItem) || '').toLowerCase().includes('veto') || (getObservacoes(selectedItem) || '').toLowerCase().includes('veto');
-                      const isArquivadoModal = sitLowerModal.includes('arquivad') || isVetadoModal || sitLowerModal.includes('lei') || sitLowerModal.includes('norma jurídica') || sitLowerModal.includes('retirado') || sitLowerModal.includes('rejeitado') || leiLinkModal;
+                      const isArquivadoModal = sitLowerModal.includes('arquivad') || sitLowerModal.includes('veto') || sitLowerModal.includes('lei') || sitLowerModal.includes('norma jurídica') || sitLowerModal.includes('retirado') || sitLowerModal.includes('rejeitado') || leiLinkModal;
                       
                       return !isArquivadoModal ? (
                         <>
@@ -887,7 +897,7 @@ export default function App() {
                               <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Relator(a) Atual</p>
                               <p className="text-[15px] font-black uppercase">{getRelator(selectedItem) || '-'}</p>
                               {getInformacaoRelatoria(selectedItem) && (
-                                <p className="text-[15px] font-bold text-gray-700 leading-tight italic mt-1">
+                                <p className="text-sm font-bold text-gray-600 leading-tight italic mt-1">
                                   {getInformacaoRelatoria(selectedItem)}
                                 </p>
                               )}
@@ -939,35 +949,19 @@ export default function App() {
 
                 {(() => {
                   let parsedLinks = [];
-                  let isVetadoModal = false;
-                  
                   try {
                     const rawLinks = getLinksAdicionais(selectedItem);
                     if (rawLinks && rawLinks !== '-') parsedLinks = JSON.parse(rawLinks);
-                    
-                    const sitLowerModal = (getSituacao(selectedItem) || '').toLowerCase();
-                    const ultMov = (getUltimoMovimento(selectedItem) || '').toLowerCase();
-                    const obsModal = (getObservacoes(selectedItem) || '').toLowerCase();
-                    isVetadoModal = sitLowerModal.includes('veto') || sitLowerModal.includes('vetad') || ultMov.includes('veto') || obsModal.includes('veto');
                   } catch(e) {}
                   
-                  if (parsedLinks.length > 0 || isVetadoModal) {
+                  if (parsedLinks.length > 0) {
                     let leiLink = parsedLinks.find(l => /\blei\b/i.test(l.label.toLowerCase()) || l.label.toLowerCase().includes('promulgad'));
-                    let diarioL = parsedLinks.find(l => l.label.toLowerCase().includes('diário'));
-                    let redacaoL = parsedLinks.find(l => l.label.toLowerCase().includes('redação'));
-                    let vetoL = parsedLinks.find(l => l.label.toLowerCase().includes('veto'));
-                    
-                    if (!vetoL && isVetadoModal) {
-                       vetoL = parsedLinks.find(l => l.url && l.url.includes('doe.sea.sc.gov.br'));
-                    }
+                    let vetoLink = parsedLinks.find(l => l.label.toLowerCase().includes('veto'));
 
                     return (
                       <div className="pt-4 border-t-[3px] border-black border-dashed flex flex-wrap gap-3">
                         {leiLink && <a href={leiLink.url} target="_blank" rel="noreferrer" className="text-xs font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[3px] border-black px-4 py-2 flex items-center gap-2 hover:bg-[#0097a7] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform hover:-translate-y-1"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</a>}
-                        {diarioL && <a href={diarioL.url} target="_blank" rel="noreferrer" className="text-xs font-black uppercase tracking-wider bg-black text-white border-[3px] border-black px-4 py-2 flex items-center gap-2 hover:bg-gray-800 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform hover:-translate-y-1">DIÁRIO OFICIAL</a>}
-                        {vetoL && <a href={vetoL.url} target="_blank" rel="noreferrer" className="text-xs font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[3px] border-black px-4 py-2 flex items-center gap-2 hover:bg-red-800 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform hover:-translate-y-1"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><polyline points="20 6 9 17 4 12"/></svg> VETO (DIÁRIO OFICIAL)</a>}
-                        {!vetoL && isVetadoModal && <span className="text-xs font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[3px] border-black px-4 py-2 flex items-center gap-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">VETADO</span>}
-                        {redacaoL && !leiLink && <a href={redacaoL.url} target="_blank" rel="noreferrer" className="text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-600 border-[2px] border-gray-400 px-3 py-1.5 hover:bg-gray-200 transition-colors">REDAÇÃO FINAL</a>}
+                        {vetoLink && <a href={vetoLink.url} target="_blank" rel="noreferrer" className="text-xs font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[3px] border-black px-4 py-2 flex items-center gap-2 hover:bg-red-800 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform hover:-translate-y-1">VETO (DIÁRIO OFICIAL)</a>}
                       </div>
                     );
                   }

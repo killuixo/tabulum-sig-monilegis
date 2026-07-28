@@ -416,7 +416,7 @@ export default function App() {
           </div>
 
           <div className="flex-1 border-[4px] border-black p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white flex flex-col justify-between">
-            <div className="flex justify-between items-start mb-4 border-b-[3px] border-black pb-2">
+            <div className="flex justify-between items-start mb-4">
               <h3 className="font-black text-lg uppercase tracking-wider flex items-center gap-3">
                 Visão Geral
                 <span className="bg-black text-white px-3 py-1 text-xl font-black">{dashboardStats.total}</span>
@@ -424,7 +424,7 @@ export default function App() {
             </div>
             
             {}
-            <div className="flex flex-col md:flex-row gap-6 items-center mb-2">
+            <div className="flex flex-col md:flex-row gap-6 items-start mb-2">
               <div className="flex-1 w-full space-y-4">
                 <div className="flex flex-wrap gap-x-4 gap-y-3">
                   {pieData.map((slice) => (

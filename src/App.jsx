@@ -38,6 +38,9 @@ export default function App() {
   const [toastMsg, setToastMsg] = useState(''); 
   const [selectedItem, setSelectedItem] = useState(null);
 
+  // NOVO ESTADO: Configuração de Ordenação da Lista
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+
   const formatarData = (dataString) => {
     if (!dataString || dataString === '-') return '-';
     const apenasData = dataString.split(/[T ]/)[0];
@@ -50,6 +53,12 @@ export default function App() {
   const formatarUltimoMovimento = (texto) => {
     if (!texto || texto === '-') return '-';
     return texto.replace(/^\d{2}\/\d{2}\/\d{4}\s*-\s*/, '');
+  };
+
+  const extrairDataUltimoMovimento = (texto) => {
+    if (!texto || texto === '-') return '';
+    const match = texto.match(/^(\d{2}\/\d{2}\/\d{4})/);
+    return match ? match[1] : '';
   };
 
   const getNumero = (item) => item['Número da Proposição'] || item['Numero da Proposicao'] || item['numero'] || '';
@@ -73,6 +82,9 @@ export default function App() {
   };
   const getLinksAdicionais = (item) => {
       return item['Links Adicionais'] || item['links_adicionais'] || item['Links adicionais'] || '';
+  };
+  const getDataPublicacaoPreLei = (item) => {
+      return item['Data da Publicação da Redação Final'] || item['Data Publicação Pré-Lei'] || '';
   };
 
   const API_URL = (() => {
@@ -309,6 +321,57 @@ export default function App() {
     };
   }, [data, activeTab, searchTerm, toggleAprovadas, toggleUtilidade, filters]);
 
+  const handleSort = (key) => {
+    setSortConfig((prev) => {
+      if (prev.key === key) {
+        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      return { key, direction: 'desc' }; // Padrão desc para datas e números
+    });
+  };
+
+  const sortedFilteredData = useMemo(() => {
+    if (!sortConfig.key) return filteredData;
+    
+    return [...filteredData].sort((a, b) => {
+      let aVal, bVal;
+      
+      if (sortConfig.key === 'numero') {
+        const getNum = (item) => {
+          const num = getNumero(item);
+          const match = num.match(/(\d+)\/(\d+)/);
+          return match ? parseInt(match[2]) * 10000 + parseInt(match[1]) : 0;
+        };
+        aVal = getNum(a);
+        bVal = getNum(b);
+        if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      } else if (sortConfig.key === 'movimento') {
+        const getDate = (item) => {
+          const ult = item['Último Movimento'] || item['Ultimo Movimento'] || '';
+          const match = ult.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+          return match ? new Date(`${match[3]}-${match[2]}-${match[1]}`).getTime() : 0;
+        };
+        aVal = getDate(a);
+        bVal = getDate(b);
+        if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      } else if (sortConfig.key === 'ementa') {
+        aVal = getEmenta(a) || '';
+        bVal = getEmenta(b) || '';
+        return sortConfig.direction === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      } else if (sortConfig.key === 'situacao') {
+        aVal = getSituacao(a) || '';
+        bVal = getSituacao(b) || '';
+        return sortConfig.direction === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      }
+
+      return 0;
+    });
+  }, [filteredData, sortConfig]);
+
   const handleCheckboxChange = (category, value) => {
     setFilters(prev => {
       const current = prev[category];
@@ -348,6 +411,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#f8f9fa] text-black font-sans p-4 md:p-8 selection:bg-[#ffdb58] selection:text-black">
       
+      {}
       <div className="max-w-7xl mx-auto mb-8">
         <div className="border-[6px] border-black bg-white grid grid-cols-1 md:grid-cols-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
           <div className="md:col-span-3 p-6 md:p-10 border-b-[6px] md:border-b-0 md:border-r-[6px] border-black flex flex-row items-center gap-4 md:gap-8">
@@ -388,10 +452,10 @@ export default function App() {
         </div>
       </div>
 
+      {}
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col lg:flex-row gap-6 mb-6">
           
-          {}
           <div className="flex flex-col gap-3 lg:w-1/3">
             <button 
               onClick={() => setToggleAprovadas(!toggleAprovadas)} 
@@ -416,9 +480,7 @@ export default function App() {
             </button>
           </div>
 
-          {}
           <div className="flex-1 border-[4px] border-black p-4 md:p-6 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white flex flex-col sm:flex-row gap-6 items-start">
-            
             <div className="flex-1 flex flex-col gap-5 w-full">
               <div className="flex justify-start items-center gap-3">
                 <h3 className="font-black text-lg md:text-xl uppercase tracking-wider m-0 leading-none">Visão Geral</h3>
@@ -564,7 +626,6 @@ export default function App() {
           </div>
         )}
 
-        {}
         <div className="flex flex-col md:flex-row gap-4 mb-8">
           <div className="flex-1 relative flex border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white focus-within:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] focus-within:-translate-y-0.5 transition-all">
             <div className={`w-4 border-r-[4px] border-black ${activeTab === 'processo' ? MONDRIAN_COLORS[0] : MONDRIAN_COLORS[1]}`}></div>
@@ -612,7 +673,7 @@ export default function App() {
         {}
         {!loading && !error && viewMode === 'card' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {filteredData.map((item, index) => {
+            {sortedFilteredData.map((item, index) => {
               const numeroProp = getNumero(item) || 'S/N';
               const ementaProp = getEmenta(item);
               const ultimoMovimentoProp = getUltimoMovimento(item);
@@ -656,6 +717,7 @@ export default function App() {
               let boxTitle = 'Último Movimento';
               let iconeCaixa = <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>;
               
+              const dataUltMov = extrairDataUltimoMovimento(ultimoMovimentoProp);
               let textoCaixa = formatarUltimoMovimento(ultimoMovimentoProp);
 
               if (isVeto) {
@@ -713,9 +775,9 @@ export default function App() {
                     <div className="p-5 flex-grow flex flex-col gap-4">
                       
                       <div className={`border-[3px] p-3 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] ${boxColorClass}`}>
-                        <p className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1 mb-1 ${titleColorClass}`}>
-                          {iconeCaixa}
-                          {boxTitle}
+                        <p className={`text-[10px] font-black uppercase tracking-wider flex items-center justify-between mb-1 ${titleColorClass}`}>
+                          <span className="flex items-center gap-1">{iconeCaixa} {boxTitle}</span>
+                          {dataUltMov && <span>{dataUltMov}</span>}
                         </p>
                         <p className={`text-[13px] font-bold leading-snug ${titleColorClass}`}>
                           {textoCaixa}
@@ -734,6 +796,11 @@ export default function App() {
                         <p className="text-[16px] font-black leading-tight border-l-[4px] border-black pl-3 mt-1 truncate">
                           {getSituacao(item) || '-'}
                         </p>
+                        {isAprovadoLei && getDataPublicacaoPreLei(item) && (
+                          <p className="text-[10px] font-bold text-[#008080] mt-1 pl-3 uppercase">
+                            Pub. Redação Final: {getDataPublicacaoPreLei(item)}
+                          </p>
+                        )}
                       </div>
                       
                       <div className="flex justify-between gap-4">
@@ -817,7 +884,37 @@ export default function App() {
         {}
         {!loading && !error && viewMode === 'list' && (
           <div className="flex flex-col gap-4">
-            {filteredData.map((item, index) => {
+            
+            {/* CABEÇALHO DA LISTA (COMO TABELA) */}
+            {sortedFilteredData.length > 0 && (
+              <div className="hidden md:flex flex-row bg-black text-white border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] mb-2 mt-2">
+                <div className="w-4 border-r-[4px] border-black flex-shrink-0"></div>
+                <div className="p-4 flex-grow flex flex-row gap-6 items-center">
+                  
+                  <div className="md:w-32 flex-shrink-0 cursor-pointer hover:text-[#ffdb58] flex items-center gap-1 font-black uppercase text-[11px]" onClick={() => handleSort('numero')}>
+                    PROPOSIÇÃO {sortConfig.key === 'numero' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                  </div>
+                  
+                  <div className="flex-grow grid grid-cols-12 gap-4 w-full">
+                    <div className="col-span-4 cursor-pointer hover:text-[#ffdb58] flex items-center gap-1 font-black uppercase text-[11px]" onClick={() => handleSort('movimento')}>
+                      ÚLTIMO MOV. {sortConfig.key === 'movimento' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                    </div>
+                    <div className="col-span-5 cursor-pointer hover:text-[#ffdb58] flex items-center gap-1 font-black uppercase text-[11px]" onClick={() => handleSort('ementa')}>
+                      EMENTA {sortConfig.key === 'ementa' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                    </div>
+                    <div className="col-span-3 cursor-pointer hover:text-[#ffdb58] flex items-center gap-1 font-black uppercase text-[11px]" onClick={() => handleSort('situacao')}>
+                      SITUAÇÃO / SETOR {sortConfig.key === 'situacao' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                    </div>
+                  </div>
+
+                  <div className="w-64 flex-shrink-0 pl-4 border-l-[3px] border-transparent font-black uppercase text-[11px]">
+                    NOTAS INTERNAS
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {sortedFilteredData.map((item, index) => {
               const numeroProp = getNumero(item) || 'S/N';
               const ementaProp = getEmenta(item);
               const ultimoMovimentoProp = getUltimoMovimento(item);
@@ -858,6 +955,8 @@ export default function App() {
               let boxColorClass = 'bg-white text-black';
               let titleColorClass = 'text-black';
               let boxTitle = 'Último Movimento';
+              
+              const dataUltMov = extrairDataUltimoMovimento(ultimoMovimentoProp);
               let textoCaixa = formatarUltimoMovimento(ultimoMovimentoProp);
 
               if (isVeto) {
@@ -911,26 +1010,34 @@ export default function App() {
                       <div className="flex-grow grid grid-cols-1 md:grid-cols-12 gap-4 w-full">
                         <div className="md:col-span-4">
                           <div className={`p-2 border-[2px] border-black ${boxColorClass} h-full flex flex-col justify-center`}>
-                            <p className={`text-[10px] font-black uppercase tracking-wider mb-1 ${titleColorClass}`}>{boxTitle}</p>
+                            <p className={`text-[10px] font-black uppercase tracking-wider mb-1 flex items-center justify-between ${titleColorClass}`}>
+                              <span>{boxTitle}</span>
+                              {dataUltMov && <span>{dataUltMov}</span>}
+                            </p>
                             <p className={`text-[13px] font-bold line-clamp-3 ${titleColorClass}`} title={textoCaixa}>{textoCaixa}</p>
                           </div>
                         </div>
                         <div className="md:col-span-5 flex flex-col justify-center">
-                          <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Ementa</p>
+                          <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1 md:hidden">Ementa</p>
                           <p className="text-[13px] font-bold text-gray-800 line-clamp-3" title={ementaProp}>{ementaProp || '-'}</p>
                         </div>
                         <div className="md:col-span-3 flex flex-col justify-center">
-                          <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Situação / Setor</p>
+                          <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1 md:hidden">Situação / Setor</p>
                           <p className="text-[13px] font-bold">{getSituacao(item) || '-'}</p>
                           <p className="text-[10px] text-gray-600 font-bold line-clamp-2">{getSetor(item) || '-'}</p>
+                          {isAprovadoLei && getDataPublicacaoPreLei(item) && (
+                            <p className="text-[10px] font-bold text-[#008080] mt-1">
+                              Pub. Redação Final: {getDataPublicacaoPreLei(item)}
+                            </p>
+                          )}
                         </div>
                       </div>
 
                       <div className="w-full md:w-64 flex-shrink-0 border-t-[3px] md:border-t-0 md:border-l-[3px] border-black border-dashed pt-3 md:pt-0 md:pl-4">
                         <div className="flex justify-between items-center mb-2">
-                          <p className="text-xs font-black text-gray-800 uppercase flex items-center gap-1">Notas</p>
+                          <p className="text-xs font-black text-gray-800 uppercase flex items-center gap-1 md:hidden">Notas</p>
                           {editingId !== numeroProp && (
-                            <button onClick={(e) => { e.stopPropagation(); setEditingId(numeroProp); setEditValue(obsProp || ''); }} className="text-[10px] font-bold uppercase underline hover:text-[#008080] transition-colors">Editar</button>
+                            <button onClick={(e) => { e.stopPropagation(); setEditingId(numeroProp); setEditValue(obsProp || ''); }} className="text-[10px] font-bold uppercase underline hover:text-[#008080] transition-colors md:ml-auto">Editar</button>
                           )}
                         </div>
                         
@@ -1005,9 +1112,14 @@ export default function App() {
               <div className="p-6 md:p-8 flex flex-col gap-6 overflow-y-auto">
                 
                 <div className="border-[3px] border-black p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-[#ffdb58]">
-                  <p className="text-xs font-black text-black uppercase tracking-wider flex items-center gap-2 mb-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
-                    Último Movimento
+                  <p className="text-xs font-black text-black uppercase tracking-wider flex items-center justify-between mb-2">
+                    <span className="flex items-center gap-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+                      Último Movimento
+                    </span>
+                    {extrairDataUltimoMovimento(getUltimoMovimento(selectedItem)) && (
+                      <span>{extrairDataUltimoMovimento(getUltimoMovimento(selectedItem))}</span>
+                    )}
                   </p>
                   <p className="text-lg font-black text-black leading-snug">
                     {formatarUltimoMovimento(getUltimoMovimento(selectedItem)) || '-'}
@@ -1026,6 +1138,19 @@ export default function App() {
                     <div className="border-[3px] border-black p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-center">
                       <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Situação Geral</p>
                       <p className="text-xl font-black text-[#008080] leading-tight">{getSituacao(selectedItem) || '-'}</p>
+                      {(() => {
+                        const isProcessoModal = ['PL', 'PEC', 'PLC', 'PDL', 'PRC', 'MPV', 'VET', 'MSG', 'PSA'].includes(getNumero(selectedItem).split('/')[0].replace('.', ''));
+                        const sitLower = (getSituacao(selectedItem) || '').toLowerCase();
+                        const isAprovadoLeiModal = isProcessoModal && (sitLower.includes('lei') || sitLower.includes('norma jurídica'));
+                        if (isAprovadoLeiModal && getDataPublicacaoPreLei(selectedItem)) {
+                           return (
+                             <p className="text-[12px] font-bold text-[#008080] mt-2 uppercase">
+                               Publicação Redação Final: {getDataPublicacaoPreLei(selectedItem)}
+                             </p>
+                           );
+                        }
+                        return null;
+                      })()}
                     </div>
                     <div className="border-[3px] border-black p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-center">
                       <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Setor Atual</p>

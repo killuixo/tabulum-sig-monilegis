@@ -195,7 +195,7 @@ export default function App() {
          const temLinkVeto = parsedLinks.some(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
          if (temPalavraVeto || temLinkVeto) isVeto = true;
 
-         const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica');
+         const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica') || ultMovLower.includes('transformado em lei') || ultMovLower.includes('redação final');
          const temLinkLei = parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
          if ((temPalavraLei || temLinkLei) && !isVeto) isAprovadoLei = true;
       }
@@ -279,7 +279,7 @@ export default function App() {
          const temLinkVeto = parsedLinks.some(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
          if (temPalavraVeto || temLinkVeto) isVeto = true;
 
-         const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica');
+         const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica') || ultMovLower.includes('transformado em lei') || ultMovLower.includes('redação final');
          const temLinkLei = parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
          if ((temPalavraLei || temLinkLei) && !isVeto) isAprovadoLei = true;
 
@@ -705,7 +705,7 @@ export default function App() {
                  vetoLink = parsedLinks.find(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
                  if (temPalavraVeto || vetoLink) isVeto = true;
 
-                 const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica');
+                 const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica') || ultMovLower.includes('transformado em lei') || ultMovLower.includes('redação final');
                  leiLink = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
                  if ((temPalavraLei || leiLink) && !isVeto) isAprovadoLei = true;
               }
@@ -945,7 +945,7 @@ export default function App() {
                  vetoLink = parsedLinks.find(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
                  if (temPalavraVeto || vetoLink) isVeto = true;
 
-                 const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica');
+                 const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica') || ultMovLower.includes('transformado em lei') || ultMovLower.includes('redação final');
                  leiLink = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
                  if ((temPalavraLei || leiLink) && !isVeto) isAprovadoLei = true;
               }
@@ -1181,7 +1181,7 @@ export default function App() {
                          const temLinkVeto = parsedLinks.some(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
                          if (temPalavraVeto || temLinkVeto) isVetoModal = true;
 
-                         const temPalavraLei = sitLowerModal.includes('lei') || sitLowerModal.includes('norma jurídica');
+                         const temPalavraLei = sitLowerModal.includes('lei') || sitLowerModal.includes('norma jurídica') || ultMovLowerModal.includes('transformado em lei') || ultMovLowerModal.includes('redação final');
                          const temLinkLei = parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
                          if ((temPalavraLei || temLinkLei) && !isVetoModal) isAprovadoLeiModal = true;
                       }
@@ -1267,7 +1267,7 @@ export default function App() {
                       let vetoLinkModal = parsedLinks.find(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
                       if (temPalavraVeto || vetoLinkModal) isVetoModal = true;
                       
-                      const temPalavraLei = sitLowerModal.includes('lei') || sitLowerModal.includes('norma jurídica');
+                      const temPalavraLei = sitLowerModal.includes('lei') || sitLowerModal.includes('norma jurídica') || ultMovLowerModal.includes('transformado em lei') || ultMovLowerModal.includes('redação final');
                       let leiLinkModal = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
                       if ((temPalavraLei || leiLinkModal) && !isVetoModal) isAprovadoLeiModal = true;
 

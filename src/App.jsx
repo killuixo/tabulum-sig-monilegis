@@ -38,7 +38,7 @@ export default function App() {
   const [toastMsg, setToastMsg] = useState(''); 
   const [selectedItem, setSelectedItem] = useState(null);
 
-  // NOVO ESTADO: Configuração de Ordenação da Lista
+  // Configuração de Ordenação da Lista
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
 
   const formatarData = (dataString) => {
@@ -195,6 +195,7 @@ export default function App() {
          const temLinkVeto = parsedLinks.some(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
          if (temPalavraVeto || temLinkVeto) isVeto = true;
 
+         // AVALIA SE É LEI DE FORMA AMPLA (Situação, Último Movimento ou Links)
          const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica') || ultMovLower.includes('transformado em lei') || ultMovLower.includes('redação final');
          const temLinkLei = parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
          if ((temPalavraLei || temLinkLei) && !isVeto) isAprovadoLei = true;
@@ -411,7 +412,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#f8f9fa] text-black font-sans p-4 md:p-8 selection:bg-[#ffdb58] selection:text-black">
       
-      {}
+      {/* CABEÇALHO TABULUM */}
       <div className="max-w-7xl mx-auto mb-8">
         <div className="border-[6px] border-black bg-white grid grid-cols-1 md:grid-cols-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
           <div className="md:col-span-3 p-6 md:p-10 border-b-[6px] md:border-b-0 md:border-r-[6px] border-black flex flex-row items-center gap-4 md:gap-8">
@@ -452,10 +453,11 @@ export default function App() {
         </div>
       </div>
 
-      {}
+      {/* DASHBOARD PRINCIPAL */}
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col lg:flex-row gap-6 mb-6">
           
+          {/* BOTÕES DE FILTRO RÁPIDO */}
           <div className="flex flex-col gap-3 lg:w-1/3">
             <button 
               onClick={() => setToggleAprovadas(!toggleAprovadas)} 
@@ -480,7 +482,9 @@ export default function App() {
             </button>
           </div>
 
+          {/* ESTATÍSTICAS E GRÁFICOS */}
           <div className="flex-1 border-[4px] border-black p-4 md:p-6 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white flex flex-col sm:flex-row gap-6 items-start">
+            
             <div className="flex-1 flex flex-col gap-5 w-full">
               <div className="flex justify-start items-center gap-3">
                 <h3 className="font-black text-lg md:text-xl uppercase tracking-wider m-0 leading-none">Visão Geral</h3>
@@ -565,7 +569,7 @@ export default function App() {
           </div>
         </div>
 
-        {}
+        {/* ÁREA DE FILTROS AVANÇADOS */}
         {showFilters && (
           <div className="mb-6 p-6 border-[4px] border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
             <div className="flex justify-between items-center mb-4 border-b-[3px] border-black pb-2">
@@ -626,6 +630,7 @@ export default function App() {
           </div>
         )}
 
+        {/* BARRA DE PESQUISA E VISÃO */}
         <div className="flex flex-col md:flex-row gap-4 mb-8">
           <div className="flex-1 relative flex border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white focus-within:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] focus-within:-translate-y-0.5 transition-all">
             <div className={`w-4 border-r-[4px] border-black ${activeTab === 'processo' ? MONDRIAN_COLORS[0] : MONDRIAN_COLORS[1]}`}></div>
@@ -648,7 +653,6 @@ export default function App() {
           </div>
         </div>
 
-        {}
         {loading && (
           <div className="flex flex-col items-center justify-center p-20 border-[6px] border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] gap-6">
             <svg className="animate-spin w-16 h-16 flex-shrink-0" viewBox="0 0 100 100">
@@ -670,7 +674,6 @@ export default function App() {
           </div>
         )}
 
-        {}
         {!loading && !error && viewMode === 'card' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {sortedFilteredData.map((item, index) => {
@@ -705,6 +708,7 @@ export default function App() {
                  vetoLink = parsedLinks.find(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
                  if (temPalavraVeto || vetoLink) isVeto = true;
 
+                 // AVALIA SE É LEI DE FORMA AMPLA
                  const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica') || ultMovLower.includes('transformado em lei') || ultMovLower.includes('redação final');
                  leiLink = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
                  if ((temPalavraLei || leiLink) && !isVeto) isAprovadoLei = true;
@@ -881,11 +885,9 @@ export default function App() {
           </div>
         )}
 
-        {}
         {!loading && !error && viewMode === 'list' && (
           <div className="flex flex-col gap-4">
             
-            {/* CABEÇALHO DA LISTA (COMO TABELA) */}
             {sortedFilteredData.length > 0 && (
               <div className="hidden md:flex flex-row bg-black text-white border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] mb-2 mt-2">
                 <div className="w-4 border-r-[4px] border-black flex-shrink-0"></div>
@@ -945,6 +947,7 @@ export default function App() {
                  vetoLink = parsedLinks.find(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
                  if (temPalavraVeto || vetoLink) isVeto = true;
 
+                 // AVALIA SE É LEI DE FORMA AMPLA
                  const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica') || ultMovLower.includes('transformado em lei') || ultMovLower.includes('redação final');
                  leiLink = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
                  if ((temPalavraLei || leiLink) && !isVeto) isAprovadoLei = true;
@@ -1083,7 +1086,6 @@ export default function App() {
           </div>
         )}
 
-        {}
         {selectedItem && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setSelectedItem(null)}>
             <div className="bg-white border-[6px] border-black shadow-[12px_12px_0px_0px_rgba(255,219,88,1)] w-full max-w-4xl max-h-[90vh] flex flex-col relative" onClick={e => e.stopPropagation()}>
@@ -1141,7 +1143,9 @@ export default function App() {
                       {(() => {
                         const isProcessoModal = ['PL', 'PEC', 'PLC', 'PDL', 'PRC', 'MPV', 'VET', 'MSG', 'PSA'].includes(getNumero(selectedItem).split('/')[0].replace('.', ''));
                         const sitLower = (getSituacao(selectedItem) || '').toLowerCase();
-                        const isAprovadoLeiModal = isProcessoModal && (sitLower.includes('lei') || sitLower.includes('norma jurídica'));
+                        const ultMovLower = (getUltimoMovimento(selectedItem) || '').toLowerCase();
+                        // AVALIA SE É LEI DE FORMA AMPLA TAMBÉM AQUI
+                        const isAprovadoLeiModal = isProcessoModal && (sitLower.includes('lei') || sitLower.includes('norma jurídica') || ultMovLower.includes('transformado em lei') || ultMovLower.includes('redação final'));
                         if (isAprovadoLeiModal && getDataPublicacaoPreLei(selectedItem)) {
                            return (
                              <p className="text-[12px] font-bold text-[#008080] mt-2 uppercase">
@@ -1285,7 +1289,6 @@ export default function App() {
         )}
       </div>
 
-      {}
       {toastMsg && (
         <div className="fixed bottom-6 right-6 p-4 border-[4px] border-black bg-[#ffdb58] text-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] z-50 flex items-center gap-3 animate-bounce">
            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>

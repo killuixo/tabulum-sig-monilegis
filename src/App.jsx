@@ -22,6 +22,7 @@ export default function App() {
   
   const [showFilters, setShowFilters] = useState(false);
   const [toggleAprovadas, setToggleAprovadas] = useState(false);
+  const [toggleExcetoAprovadas, setToggleExcetoAprovadas] = useState(false);
   const [toggleUtilidade, setToggleUtilidade] = useState(false);
   const [filters, setFilters] = useState({
     tipo: [],
@@ -158,6 +159,7 @@ export default function App() {
      limparFiltrosAvançados();
      setSearchTerm('');
      setToggleAprovadas(false);
+     setToggleExcetoAprovadas(false);
      setToggleUtilidade(false);
   };
 
@@ -214,6 +216,7 @@ export default function App() {
 
       if (filters.macro.length > 0 && !filters.macro.includes(macroStatus)) return false;
       if (toggleAprovadas && !isAprovadoLei) return false;
+      if (toggleExcetoAprovadas && isAprovadoLei) return false;
       if (toggleUtilidade && !emenLower.includes('utilidade pública')) return false;
 
       // Filtros exatos
@@ -333,7 +336,7 @@ export default function App() {
         vista: Array.from(optVista).sort()
       }
     };
-  }, [data, activeTab, searchTerm, toggleAprovadas, toggleUtilidade, filters]);
+  }, [data, activeTab, searchTerm, toggleAprovadas, toggleExcetoAprovadas, toggleUtilidade, filters]);
 
   const handleSort = (key) => {
     setSortConfig((prev) => {
@@ -380,6 +383,18 @@ export default function App() {
         aVal = getSituacao(a) || '';
         bVal = getSituacao(b) || '';
         return sortConfig.direction === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      } else if (sortConfig.key === 'publicacao') {
+        const parsePubDate = (d) => {
+          if (!d || typeof d !== 'string' || d === '-') return 0;
+          const parts = d.split('/');
+          if (parts.length === 3) return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`).getTime();
+          return 0;
+        };
+        aVal = parsePubDate(getDataPublicacaoPreLei(a));
+        bVal = parsePubDate(getDataPublicacaoPreLei(b));
+        if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
       }
       return 0;
     });
@@ -468,13 +483,22 @@ export default function App() {
         <div className="flex flex-col lg:flex-row gap-6 mb-6">
           
           <div className="flex flex-col gap-3 lg:w-1/3">
-            <button 
-              onClick={() => setToggleAprovadas(!toggleAprovadas)} 
-              className={`px-4 py-4 border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 font-black uppercase text-sm transition-all flex items-center justify-between ${toggleAprovadas ? 'bg-[#008080] text-white' : 'bg-white text-black'}`}
-            >
-              <span>{toggleAprovadas ? '✓ Leis Aprovadas' : 'Leis Aprovadas'}</span>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" /></svg>
-            </button>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => { setToggleAprovadas(!toggleAprovadas); if(!toggleAprovadas) setToggleExcetoAprovadas(false); }}
+                className={`flex-1 px-2 py-4 border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 font-black uppercase text-[10px] md:text-xs transition-all flex flex-col items-center justify-center text-center ${toggleAprovadas ? 'bg-[#008080] text-white' : 'bg-white text-black'}`}
+              >
+                <span>{toggleAprovadas ? '✓ Apenas' : 'Apenas'}</span>
+                <span>Aprovados</span>
+              </button>
+              <button 
+                onClick={() => { setToggleExcetoAprovadas(!toggleExcetoAprovadas); if(!toggleExcetoAprovadas) setToggleAprovadas(false); }}
+                className={`flex-1 px-2 py-4 border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 font-black uppercase text-[10px] md:text-xs transition-all flex flex-col items-center justify-center text-center ${toggleExcetoAprovadas ? 'bg-[#c41e3a] text-white' : 'bg-white text-black'}`}
+              >
+                <span>{toggleExcetoAprovadas ? '✓ Exceto' : 'Exceto'}</span>
+                <span>Aprovados</span>
+              </button>
+            </div>
             <button 
               onClick={() => setToggleUtilidade(!toggleUtilidade)} 
               className={`px-4 py-4 border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 font-black uppercase text-sm transition-all flex items-center justify-between ${toggleUtilidade ? 'bg-[#ffdb58] text-black' : 'bg-white text-black'}`}
@@ -917,8 +941,13 @@ export default function App() {
                     <div className="col-span-5 cursor-pointer hover:text-[#ffdb58] flex items-center gap-1 font-black uppercase text-[11px]" onClick={() => handleSort('ementa')}>
                       EMENTA {sortConfig.key === 'ementa' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                     </div>
-                    <div className="col-span-3 cursor-pointer hover:text-[#ffdb58] flex items-center gap-1 font-black uppercase text-[11px]" onClick={() => handleSort('situacao')}>
-                      SITUAÇÃO / SETOR {sortConfig.key === 'situacao' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                    <div className="col-span-3 flex flex-col justify-center gap-1">
+                      <div className="cursor-pointer hover:text-[#ffdb58] flex items-center gap-1 font-black uppercase text-[11px] leading-none" onClick={() => handleSort('situacao')}>
+                        SITUAÇÃO / SETOR {sortConfig.key === 'situacao' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                      </div>
+                      <div className="cursor-pointer hover:text-[#00bcd4] flex items-center gap-1 font-black uppercase text-[9px] text-gray-400 leading-none" onClick={() => handleSort('publicacao')} title="Ordenar pela data de publicação da Redação Final">
+                        PUB. REDAÇÃO FINAL {sortConfig.key === 'publicacao' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                      </div>
                     </div>
                   </div>
 

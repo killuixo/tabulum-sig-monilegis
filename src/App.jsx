@@ -6,6 +6,7 @@ const MONDRIAN_COLORS = [
   'bg-[#ffdb58]', // Mostarda
 ];
 
+// Paleta expandida para os diversos tipos de proposição no gráfico de pizza
 const PIE_COLORS = [
   '#008080', '#c41e3a', '#ffdb58', '#2b2b2b', '#8a2be2', 
   '#e67e22', '#16a085', '#d35400', '#2980b9', '#7f8c8d', '#8e44ad'
@@ -36,7 +37,7 @@ export default function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [toastMsg, setToastMsg] = useState(''); 
   const [selectedItem, setSelectedItem] = useState(null);
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  const [sortConfig, setSortConfig] = useState({ key: 'movimento', direction: 'desc' });
 
   const formatarData = (dataString) => {
     if (!dataString || dataString === '-') return '-';
@@ -50,12 +51,6 @@ export default function App() {
   const formatarUltimoMovimento = (texto) => {
     if (!texto || texto === '-') return '-';
     return texto.replace(/^\d{2}\/\d{2}\/\d{4}\s*-\s*/, '');
-  };
-
-  const extrairDataUltimoMovimento = (texto) => {
-    if (!texto || texto === '-') return '';
-    const match = texto.match(/^(\d{2}\/\d{2}\/\d{4})/);
-    return match ? match[1] : '';
   };
 
   const getNumero = (item) => item['Número da Proposição'] || item['Numero da Proposicao'] || item['numero'] || '';
@@ -80,9 +75,6 @@ export default function App() {
   const getLinksAdicionais = (item) => {
       return item['Links Adicionais'] || item['links_adicionais'] || item['Links adicionais'] || '';
   };
-  const getDataPublicacaoPreLei = (item) => {
-      return item['Data da Publicação da Redação Final'] || item['Data Publicação Pré-Lei'] || '';
-  };
 
   const API_URL = (() => {
     try {
@@ -105,28 +97,15 @@ export default function App() {
       if (!API_URL || API_URL === "COLE_SUA_URL_DO_SCRIPT_AQUI") {
         throw new Error("A URL do Google Script não foi configurada.");
       }
-      
-      const urlBypassCache = `${API_URL}${API_URL.includes('?') ? '&' : '?'}nocache=${new Date().getTime()}`;
-      
-      const response = await fetch(urlBypassCache, {
-         method: 'GET',
-         redirect: 'follow', 
-         headers: {
-             'Accept': 'application/json'
-         }
-      });
-
-      if (!response.ok) throw new Error(`Falha ao aceder aos dados da API (Erro HTTP: ${response.status}).`);
-      
+      // Adiciona timestamp para furar a cache agressiva dos navegadores de telemóvel
+      const nocacheURL = API_URL + "?nocache=" + new Date().getTime();
+      const response = await fetch(nocacheURL, { cache: 'no-store' });
+      if (!response.ok) throw new Error('Falha ao aceder aos dados da API.');
       const jsonData = await response.json();
       setData(jsonData);
     } catch (err) {
-      console.error("Erro no fetch:", err);
-      if (err.message === "Failed to fetch") {
-         setError("Erro de rede: O navegador do seu telemóvel bloqueou a ligação com o Google (CORS/Redirect) ou a cache falhou.");
-      } else {
-         setError(err.message);
-      }
+      console.error(err);
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -203,14 +182,12 @@ export default function App() {
       let isAprovadoLei = false;
 
       if (isProcesso) {
-         // O veto aparece escrito ou o script captou a tag Veto
          const temPalavraVeto = sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto');
-         const temLinkVeto = parsedLinks.some(l => l.label.toLowerCase().includes('veto'));
+         const temLinkVeto = parsedLinks.some(l => l.url && l.url.includes('doe.sea.sc.gov.br') || (l.label && l.label.toLowerCase().includes('veto')));
          if (temPalavraVeto || temLinkVeto) isVeto = true;
 
-         // Transformado em Lei: Pega estritamente a frase exata ou a tag injetada pelo script
-         const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica') || ultMovLower.includes('transformado em lei') || ultMovLower.includes('redação final');
-         const temLinkLei = parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+         const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica') || ultMovLower.includes('transformado em lei');
+         const temLinkLei = parsedLinks.some(l => l.label && (/\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad')));
          if ((temPalavraLei || temLinkLei) && !isVeto) isAprovadoLei = true;
       }
 
@@ -228,28 +205,17 @@ export default function App() {
       }
 
       if (filters.macro.length > 0 && !filters.macro.includes(macroStatus)) return false;
+
       if (toggleAprovadas && !isAprovadoLei) return false;
       if (toggleUtilidade && !emenLower.includes('utilidade pública')) return false;
 
-      // Filtros exatos
       if (filters.tipo.length > 0 && !filters.tipo.includes(getTipoProposicao(item))) return false;
-      
-      // Se o usuário clicar em "Veto", busca as correspondências exatas E os vetos arquivados
-      if (filters.situacao.length > 0) {
-          const matchSituacaoExata = filters.situacao.includes(getSituacao(item));
-          const procuraPorVeto = filters.situacao.some(s => s.toLowerCase().includes('veto'));
-          if (!matchSituacaoExata && !(procuraPorVeto && isVeto)) {
-              return false;
-          }
-      }
-
+      if (filters.situacao.length > 0 && !filters.situacao.includes(getSituacao(item))) return false;
       if (filters.relator.length > 0 && !filters.relator.includes(getRelator(item))) return false;
       if (filters.vista.length > 0 && !filters.vista.includes(getPedidoVista(item))) return false;
 
-      // Busca Universal ampliada
       const term = searchTerm.toLowerCase();
       if (term) {
-        const linksText = parsedLinks.map(l => l.label.toLowerCase()).join(' ');
         return num.toLowerCase().includes(term) || 
                getRelator(item).toLowerCase().includes(term) || 
                sitLower.includes(term) || 
@@ -259,10 +225,8 @@ export default function App() {
                getSetor(item).toLowerCase().includes(term) ||
                (item['Data de Distribuição'] || '').toLowerCase().includes(term) ||
                getTipoProposicao(item).toLowerCase().includes(term) ||
-               macroStatus.toLowerCase().includes(term) ||
-               ultMovLower.includes(term) ||
-               obsLower.includes(term) ||
-               linksText.includes(term);
+               (isVeto && 'veto'.includes(term)) ||
+               (isAprovadoLei && 'lei aprovada'.includes(term));
       }
       
       return true;
@@ -305,11 +269,11 @@ export default function App() {
          let isAprovadoLei = false;
 
          const temPalavraVeto = sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto');
-         const temLinkVeto = parsedLinks.some(l => l.label.toLowerCase().includes('veto'));
+         const temLinkVeto = parsedLinks.some(l => l.url && l.url.includes('doe.sea.sc.gov.br') || (l.label && l.label.toLowerCase().includes('veto')));
          if (temPalavraVeto || temLinkVeto) isVeto = true;
 
-         const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica') || ultMovLower.includes('transformado em lei') || ultMovLower.includes('redação final');
-         const temLinkLei = parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+         const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica') || ultMovLower.includes('transformado em lei');
+         const temLinkLei = parsedLinks.some(l => l.label && (/\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad')));
          if ((temPalavraLei || temLinkLei) && !isVeto) isAprovadoLei = true;
 
          if (isAprovadoLei) macroStatus = 'Aprovados';
@@ -351,53 +315,66 @@ export default function App() {
   }, [data, activeTab, searchTerm, toggleAprovadas, toggleUtilidade, filters]);
 
   const handleSort = (key) => {
-    setSortConfig((prev) => {
-      if (prev.key === key) {
-        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
-      }
-      return { key, direction: 'desc' };
-    });
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
   };
 
   const sortedFilteredData = useMemo(() => {
-    if (!sortConfig.key) return filteredData;
-    
-    return [...filteredData].sort((a, b) => {
-      let aVal, bVal;
-      
-      if (sortConfig.key === 'numero') {
-        const getNum = (item) => {
-          const num = getNumero(item);
-          const match = num.match(/(\d+)\/(\d+)/);
-          return match ? parseInt(match[2]) * 10000 + parseInt(match[1]) : 0;
-        };
-        aVal = getNum(a);
-        bVal = getNum(b);
-        if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
-        if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+    let sortableItems = [...filteredData];
+    if (sortConfig !== null) {
+      sortableItems.sort((a, b) => {
+        let aValue = '';
+        let bValue = '';
+        
+        const numA = getNumero(a) || '';
+        const numB = getNumero(b) || '';
+
+        switch (sortConfig.key) {
+          case 'numero':
+            const matchA = numA.match(/(\d+)\/(\d{4})/);
+            const matchB = numB.match(/(\d+)\/(\d{4})/);
+            if (matchA && matchB) {
+               aValue = parseInt(matchA[2]) * 10000 + parseInt(matchA[1]);
+               bValue = parseInt(matchB[2]) * 10000 + parseInt(matchB[1]);
+            } else {
+               aValue = numA;
+               bValue = numB;
+            }
+            break;
+          case 'movimento':
+            const aMov = getUltimoMovimento(a);
+            const bMov = getUltimoMovimento(b);
+            const aDateMatch = aMov.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+            const bDateMatch = bMov.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+            if (aDateMatch && bDateMatch) {
+               aValue = new Date(`${aDateMatch[3]}-${aDateMatch[2]}-${aDateMatch[1]}`).getTime();
+               bValue = new Date(`${bDateMatch[3]}-${bDateMatch[2]}-${bDateMatch[1]}`).getTime();
+            } else {
+               aValue = aMov;
+               bValue = bMov;
+            }
+            break;
+          case 'ementa':
+            aValue = getEmenta(a).toLowerCase();
+            bValue = getEmenta(b).toLowerCase();
+            break;
+          case 'situacao':
+            aValue = getSituacao(a).toLowerCase();
+            bValue = getSituacao(b).toLowerCase();
+            break;
+          default:
+            break;
+        }
+        
+        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
         return 0;
-      } else if (sortConfig.key === 'movimento') {
-        const getDate = (item) => {
-          const ult = item['Último Movimento'] || item['Ultimo Movimento'] || '';
-          const match = ult.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-          return match ? new Date(`${match[3]}-${match[2]}-${match[1]}`).getTime() : 0;
-        };
-        aVal = getDate(a);
-        bVal = getDate(b);
-        if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
-        if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
-        return 0;
-      } else if (sortConfig.key === 'ementa') {
-        aVal = getEmenta(a) || '';
-        bVal = getEmenta(b) || '';
-        return sortConfig.direction === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
-      } else if (sortConfig.key === 'situacao') {
-        aVal = getSituacao(a) || '';
-        bVal = getSituacao(b) || '';
-        return sortConfig.direction === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
-      }
-      return 0;
-    });
+      });
+    }
+    return sortableItems;
   }, [filteredData, sortConfig]);
 
   const handleCheckboxChange = (category, value) => {
@@ -484,11 +461,30 @@ export default function App() {
           
           <div className="flex flex-col gap-3 lg:w-1/3">
             <button 
-              onClick={() => setToggleAprovadas(!toggleAprovadas)} 
-              className={`px-4 py-4 border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 font-black uppercase text-sm transition-all flex items-center justify-between ${toggleAprovadas ? 'bg-[#008080] text-white' : 'bg-white text-black'}`}
+              onClick={() => {
+                 if (filters.macro.includes('Aprovados')) {
+                     setFilters(prev => ({ ...prev, macro: prev.macro.filter(m => m !== 'Aprovados') }));
+                 } else {
+                     setFilters(prev => ({ ...prev, macro: [...prev.macro, 'Aprovados'] }));
+                 }
+              }} 
+              className={`px-4 py-4 border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 font-black uppercase text-sm transition-all flex items-center justify-between ${filters.macro.includes('Aprovados') ? 'bg-[#008080] text-white' : 'bg-white text-black'}`}
             >
-              <span>{toggleAprovadas ? '✓ Leis Aprovadas' : 'Leis Aprovadas'}</span>
+              <span>{filters.macro.includes('Aprovados') ? '✓ Leis Aprovadas' : 'Leis Aprovadas'}</span>
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" /></svg>
+            </button>
+            <button 
+              onClick={() => {
+                 if (filters.macro.includes('Vetados')) {
+                     setFilters(prev => ({ ...prev, macro: prev.macro.filter(m => m !== 'Vetados') }));
+                 } else {
+                     setFilters(prev => ({ ...prev, macro: [...prev.macro, 'Vetados'] }));
+                 }
+              }} 
+              className={`px-4 py-4 border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 font-black uppercase text-sm transition-all flex items-center justify-between ${filters.macro.includes('Vetados') ? 'bg-[#c41e3a] text-white' : 'bg-white text-black'}`}
+            >
+              <span>{filters.macro.includes('Vetados') ? '✓ Projetos Vetados' : 'Projetos Vetados'}</span>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
             </button>
             <button 
               onClick={() => setToggleUtilidade(!toggleUtilidade)} 
@@ -695,6 +691,7 @@ export default function App() {
           </div>
         )}
 
+        {}
         {!loading && !error && viewMode === 'card' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {sortedFilteredData.map((item, index) => {
@@ -705,6 +702,7 @@ export default function App() {
               const linkProp = getLink(item);
               const vistaProp = getPedidoVista(item);
               const infoRelatoriaProp = getInformacaoRelatoria(item);
+              const dataRedacaoFinal = item['Data da Publicação da Redação Final'] || '';
               
               const sitLower = (getSituacao(item) || '').toLowerCase();
               const ultMovLower = ultimoMovimentoProp.toLowerCase();
@@ -726,11 +724,11 @@ export default function App() {
 
               if (isProcesso) {
                  const temPalavraVeto = sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto');
-                 vetoLink = parsedLinks.find(l => l.label.toLowerCase().includes('veto'));
+                 vetoLink = parsedLinks.find(l => l.url && l.url.includes('doe.sea.sc.gov.br') || (l.label && l.label.toLowerCase().includes('veto')));
                  if (temPalavraVeto || vetoLink) isVeto = true;
 
-                 const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica') || ultMovLower.includes('transformado em lei') || ultMovLower.includes('redação final');
-                 leiLink = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+                 const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica') || ultMovLower.includes('transformado em lei');
+                 leiLink = parsedLinks.find(l => l.label && (/\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad')));
                  if ((temPalavraLei || leiLink) && !isVeto) isAprovadoLei = true;
               }
 
@@ -741,7 +739,6 @@ export default function App() {
               let boxTitle = 'Último Movimento';
               let iconeCaixa = <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>;
               
-              const dataUltMov = extrairDataUltimoMovimento(ultimoMovimentoProp);
               let textoCaixa = formatarUltimoMovimento(ultimoMovimentoProp);
 
               if (isVeto) {
@@ -799,9 +796,9 @@ export default function App() {
                     <div className="p-5 flex-grow flex flex-col gap-4">
                       
                       <div className={`border-[3px] p-3 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] ${boxColorClass}`}>
-                        <p className={`text-[10px] font-black uppercase tracking-wider flex items-center justify-between mb-1 ${titleColorClass}`}>
-                          <span className="flex items-center gap-1">{iconeCaixa} {boxTitle}</span>
-                          {dataUltMov && <span>{dataUltMov}</span>}
+                        <p className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1 mb-1 ${titleColorClass}`}>
+                          {iconeCaixa}
+                          {boxTitle}
                         </p>
                         <p className={`text-[13px] font-bold leading-snug ${titleColorClass}`}>
                           {textoCaixa}
@@ -820,11 +817,6 @@ export default function App() {
                         <p className="text-[16px] font-black leading-tight border-l-[4px] border-black pl-3 mt-1 truncate">
                           {getSituacao(item) || '-'}
                         </p>
-                        {isAprovadoLei && getDataPublicacaoPreLei(item) && (
-                          <p className="text-[10px] font-bold text-[#008080] mt-1 pl-3 uppercase">
-                            Pub. Redação Final: {getDataPublicacaoPreLei(item)}
-                          </p>
-                        )}
                       </div>
                       
                       <div className="flex justify-between gap-4">
@@ -884,21 +876,22 @@ export default function App() {
                           </p>
                         )}
 
-                        {parsedLinks.length > 0 && isProcesso && (
+                        {isProcesso && (isVeto || isAprovadoLei) && (
                           <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t-[3px] border-black border-dashed">
                             {(() => {
-                              if (isVeto && vetoLink) {
-                                  if (vetoLink.url) {
-                                      return <a href={vetoLink.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-2 border-black px-2 py-1 flex items-center gap-1 hover:bg-red-800 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">VETO (DIÁRIO OFICIAL)</a>;
-                                  } else {
-                                      return <span className="text-[10px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-2 border-black px-2 py-1 flex items-center gap-1 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" title="Veto identificado, mas sem link publicado.">VETO REGISTRADO</span>;
-                                  }
-                              } else if (isAprovadoLei && leiLink) {
-                                  if (leiLink.url) {
-                                      return <a href={leiLink.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-2 border-black px-2 py-1 flex items-center gap-1 hover:bg-[#0097a7] transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</a>;
-                                  } else {
-                                      return <span className="text-[10px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-2 border-black px-2 py-1 flex items-center gap-1 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</span>;
-                                  }
+                              if (isVeto) {
+                                  return (
+                                    <a href={vetoLink && vetoLink.url ? vetoLink.url : '#'} onClick={e => { e.stopPropagation(); if(!vetoLink || !vetoLink.url) e.preventDefault(); }} target="_blank" rel="noreferrer" className={`text-[10px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-2 border-black px-2 py-1 flex items-center gap-1 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${vetoLink && vetoLink.url ? 'hover:bg-red-800 transition-colors' : 'opacity-80 cursor-default'}`}>
+                                      VETO {vetoLink && vetoLink.url ? '(DIÁRIO OFICIAL)' : '(S/ LINK)'}
+                                    </a>
+                                  );
+                              } else if (isAprovadoLei) {
+                                  return (
+                                    <a href={leiLink && leiLink.url ? leiLink.url : '#'} onClick={e => { e.stopPropagation(); if(!leiLink || !leiLink.url) e.preventDefault(); }} target="_blank" rel="noreferrer" className={`text-[10px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-2 border-black px-2 py-1 flex items-center gap-1 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${leiLink && leiLink.url ? 'hover:bg-[#0097a7] transition-colors' : 'opacity-80 cursor-default'}`}>
+                                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><polyline points="20 6 9 17 4 12"/></svg> 
+                                      LEI APROVADA {dataRedacaoFinal ? `(DO: ${dataRedacaoFinal})` : ''}
+                                    </a>
+                                  );
                               }
                               return null;
                             })()}
@@ -913,31 +906,35 @@ export default function App() {
           </div>
         )}
 
+        {}
         {!loading && !error && viewMode === 'list' && (
           <div className="flex flex-col gap-4">
             
             {sortedFilteredData.length > 0 && (
-              <div className="hidden md:flex flex-row bg-black text-white border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] mb-2 mt-2">
-                <div className="w-4 border-r-[4px] border-black flex-shrink-0"></div>
-                <div className="p-4 flex-grow flex flex-row gap-6 items-center">
+              <div className="flex flex-col bg-black text-white border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] mb-4 mt-2">
+                <div className="p-4 flex flex-col md:flex-row gap-4 items-start md:items-center">
                   
-                  <div className="md:w-32 flex-shrink-0 cursor-pointer hover:text-[#ffdb58] flex items-center gap-1 font-black uppercase text-[11px]" onClick={() => handleSort('numero')}>
-                    PROPOSIÇÃO {sortConfig.key === 'numero' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                  <div className="text-xs text-[#ffdb58] font-black tracking-widest md:hidden w-full border-b-[2px] border-gray-700 pb-2 mb-2 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" /></svg>
+                    ORDENAR LISTA POR:
                   </div>
-                  
-                  <div className="flex-grow grid grid-cols-12 gap-4 w-full">
-                    <div className="col-span-4 cursor-pointer hover:text-[#ffdb58] flex items-center gap-1 font-black uppercase text-[11px]" onClick={() => handleSort('movimento')}>
-                      ÚLTIMO MOV. {sortConfig.key === 'movimento' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+
+                  <div className="flex flex-col sm:flex-row md:flex-row flex-wrap md:flex-nowrap gap-3 w-full">
+                    <div className={`flex-1 cursor-pointer flex items-center justify-between md:justify-start gap-2 font-black uppercase text-xs p-3 md:p-0 rounded border-2 md:border-none md:rounded-none transition-colors ${sortConfig.key === 'numero' ? 'bg-[#ffdb58] text-black border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] md:bg-transparent md:text-[#ffdb58] md:shadow-none' : 'bg-gray-800 text-white border-gray-600 hover:bg-gray-700'}`} onClick={() => handleSort('numero')}>
+                      <span>PROPOSIÇÃO</span> {sortConfig.key === 'numero' && <span className="text-lg leading-none">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
                     </div>
-                    <div className="col-span-5 cursor-pointer hover:text-[#ffdb58] flex items-center gap-1 font-black uppercase text-[11px]" onClick={() => handleSort('ementa')}>
-                      EMENTA {sortConfig.key === 'ementa' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                    <div className={`flex-1 cursor-pointer flex items-center justify-between md:justify-start gap-2 font-black uppercase text-xs p-3 md:p-0 rounded border-2 md:border-none md:rounded-none transition-colors ${sortConfig.key === 'movimento' ? 'bg-[#ffdb58] text-black border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] md:bg-transparent md:text-[#ffdb58] md:shadow-none' : 'bg-gray-800 text-white border-gray-600 hover:bg-gray-700'}`} onClick={() => handleSort('movimento')}>
+                      <span>ÚLTIMO MOV.</span> {sortConfig.key === 'movimento' && <span className="text-lg leading-none">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
                     </div>
-                    <div className="col-span-3 cursor-pointer hover:text-[#ffdb58] flex items-center gap-1 font-black uppercase text-[11px]" onClick={() => handleSort('situacao')}>
-                      SITUAÇÃO / SETOR {sortConfig.key === 'situacao' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                    <div className={`flex-1 cursor-pointer flex items-center justify-between md:justify-start gap-2 font-black uppercase text-xs p-3 md:p-0 rounded border-2 md:border-none md:rounded-none transition-colors ${sortConfig.key === 'ementa' ? 'bg-[#ffdb58] text-black border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] md:bg-transparent md:text-[#ffdb58] md:shadow-none' : 'bg-gray-800 text-white border-gray-600 hover:bg-gray-700'}`} onClick={() => handleSort('ementa')}>
+                      <span>EMENTA</span> {sortConfig.key === 'ementa' && <span className="text-lg leading-none">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
+                    </div>
+                    <div className={`flex-1 cursor-pointer flex items-center justify-between md:justify-start gap-2 font-black uppercase text-xs p-3 md:p-0 rounded border-2 md:border-none md:rounded-none transition-colors ${sortConfig.key === 'situacao' ? 'bg-[#ffdb58] text-black border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] md:bg-transparent md:text-[#ffdb58] md:shadow-none' : 'bg-gray-800 text-white border-gray-600 hover:bg-gray-700'}`} onClick={() => handleSort('situacao')}>
+                      <span>SITUAÇÃO / SETOR</span> {sortConfig.key === 'situacao' && <span className="text-lg leading-none">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
                     </div>
                   </div>
 
-                  <div className="w-64 flex-shrink-0 pl-4 border-l-[3px] border-transparent font-black uppercase text-[11px]">
+                  <div className="hidden md:block w-64 flex-shrink-0 pl-4 border-l-[3px] border-transparent font-black uppercase text-[11px]">
                     NOTAS INTERNAS
                   </div>
                 </div>
@@ -951,6 +948,7 @@ export default function App() {
               const obsProp = getObservacoes(item);
               const linkProp = getLink(item);
               const vistaProp = getPedidoVista(item);
+              const dataRedacaoFinal = item['Data da Publicação da Redação Final'] || '';
               
               const sitLower = (getSituacao(item) || '').toLowerCase();
               const ultMovLower = ultimoMovimentoProp.toLowerCase();
@@ -972,11 +970,11 @@ export default function App() {
 
               if (isProcesso) {
                  const temPalavraVeto = sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto');
-                 vetoLink = parsedLinks.find(l => l.label.toLowerCase().includes('veto'));
+                 vetoLink = parsedLinks.find(l => l.url && l.url.includes('doe.sea.sc.gov.br') || (l.label && l.label.toLowerCase().includes('veto')));
                  if (temPalavraVeto || vetoLink) isVeto = true;
 
-                 const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica') || ultMovLower.includes('transformado em lei') || ultMovLower.includes('redação final');
-                 leiLink = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+                 const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica') || ultMovLower.includes('transformado em lei');
+                 leiLink = parsedLinks.find(l => l.label && (/\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad')));
                  if ((temPalavraLei || leiLink) && !isVeto) isAprovadoLei = true;
               }
 
@@ -985,8 +983,6 @@ export default function App() {
               let boxColorClass = 'bg-white text-black';
               let titleColorClass = 'text-black';
               let boxTitle = 'Último Movimento';
-              
-              const dataUltMov = extrairDataUltimoMovimento(ultimoMovimentoProp);
               let textoCaixa = formatarUltimoMovimento(ultimoMovimentoProp);
 
               if (isVeto) {
@@ -1040,34 +1036,26 @@ export default function App() {
                       <div className="flex-grow grid grid-cols-1 md:grid-cols-12 gap-4 w-full">
                         <div className="md:col-span-4">
                           <div className={`p-2 border-[2px] border-black ${boxColorClass} h-full flex flex-col justify-center`}>
-                            <p className={`text-[10px] font-black uppercase tracking-wider mb-1 flex items-center justify-between ${titleColorClass}`}>
-                              <span>{boxTitle}</span>
-                              {dataUltMov && <span>{dataUltMov}</span>}
-                            </p>
+                            <p className={`text-[10px] font-black uppercase tracking-wider mb-1 ${titleColorClass}`}>{boxTitle}</p>
                             <p className={`text-[13px] font-bold line-clamp-3 ${titleColorClass}`} title={textoCaixa}>{textoCaixa}</p>
                           </div>
                         </div>
                         <div className="md:col-span-5 flex flex-col justify-center">
-                          <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1 md:hidden">Ementa</p>
+                          <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Ementa</p>
                           <p className="text-[13px] font-bold text-gray-800 line-clamp-3" title={ementaProp}>{ementaProp || '-'}</p>
                         </div>
                         <div className="md:col-span-3 flex flex-col justify-center">
-                          <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1 md:hidden">Situação / Setor</p>
+                          <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Situação / Setor</p>
                           <p className="text-[13px] font-bold">{getSituacao(item) || '-'}</p>
                           <p className="text-[10px] text-gray-600 font-bold line-clamp-2">{getSetor(item) || '-'}</p>
-                          {isAprovadoLei && getDataPublicacaoPreLei(item) && (
-                            <p className="text-[10px] font-bold text-[#008080] mt-1">
-                              Pub. Redação Final: {getDataPublicacaoPreLei(item)}
-                            </p>
-                          )}
                         </div>
                       </div>
 
                       <div className="w-full md:w-64 flex-shrink-0 border-t-[3px] md:border-t-0 md:border-l-[3px] border-black border-dashed pt-3 md:pt-0 md:pl-4">
                         <div className="flex justify-between items-center mb-2">
-                          <p className="text-xs font-black text-gray-800 uppercase flex items-center gap-1 md:hidden">Notas</p>
+                          <p className="text-xs font-black text-gray-800 uppercase flex items-center gap-1">Notas</p>
                           {editingId !== numeroProp && (
-                            <button onClick={(e) => { e.stopPropagation(); setEditingId(numeroProp); setEditValue(obsProp || ''); }} className="text-[10px] font-bold uppercase underline hover:text-[#008080] transition-colors md:ml-auto">Editar</button>
+                            <button onClick={(e) => { e.stopPropagation(); setEditingId(numeroProp); setEditValue(obsProp || ''); }} className="text-[10px] font-bold uppercase underline hover:text-[#008080] transition-colors">Editar</button>
                           )}
                         </div>
                         
@@ -1085,21 +1073,21 @@ export default function App() {
                           </p>
                         )}
 
-                        {parsedLinks.length > 0 && isProcesso && (
+                        {isProcesso && (isVeto || isAprovadoLei) && (
                           <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t-[2px] border-black border-dashed">
                             {(() => {
-                              if (isVeto && vetoLink) {
-                                  if (vetoLink.url) {
-                                      return <a href={vetoLink.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[8px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:bg-red-800">VETO (DIÁRIO OFICIAL)</a>;
-                                  } else {
-                                      return <span className="text-[8px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">VETO REGISTRADO</span>;
-                                  }
-                              } else if (isAprovadoLei && leiLink) {
-                                  if (leiLink.url) {
-                                      return <a href={leiLink.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[8px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:bg-[#0097a7]">LEI APROVADA</a>;
-                                  } else {
-                                      return <span className="text-[8px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">LEI APROVADA</span>;
-                                  }
+                              if (isVeto) {
+                                  return (
+                                    <a href={vetoLink && vetoLink.url ? vetoLink.url : '#'} onClick={e => { e.stopPropagation(); if(!vetoLink || !vetoLink.url) e.preventDefault(); }} target="_blank" rel="noreferrer" className={`text-[8px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] ${vetoLink && vetoLink.url ? 'hover:bg-red-800' : 'opacity-80 cursor-default'}`}>
+                                      VETO {vetoLink && vetoLink.url ? '(DO)' : '(S/ LINK)'}
+                                    </a>
+                                  );
+                              } else if (isAprovadoLei) {
+                                  return (
+                                    <a href={leiLink && leiLink.url ? leiLink.url : '#'} onClick={e => { e.stopPropagation(); if(!leiLink || !leiLink.url) e.preventDefault(); }} target="_blank" rel="noreferrer" className={`text-[8px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] ${leiLink && leiLink.url ? 'hover:bg-[#0097a7]' : 'opacity-80 cursor-default'}`}>
+                                      LEI APROVADA {dataRedacaoFinal ? `(${dataRedacaoFinal})` : ''}
+                                    </a>
+                                  );
                               }
                               return null;
                             })()}
@@ -1121,6 +1109,7 @@ export default function App() {
           </div>
         )}
 
+        {}
         {selectedItem && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setSelectedItem(null)}>
             <div className="bg-white border-[6px] border-black shadow-[12px_12px_0px_0px_rgba(255,219,88,1)] w-full max-w-4xl max-h-[90vh] flex flex-col relative" onClick={e => e.stopPropagation()}>
@@ -1149,14 +1138,9 @@ export default function App() {
               <div className="p-6 md:p-8 flex flex-col gap-6 overflow-y-auto">
                 
                 <div className="border-[3px] border-black p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-[#ffdb58]">
-                  <p className="text-xs font-black text-black uppercase tracking-wider flex items-center justify-between mb-2">
-                    <span className="flex items-center gap-2">
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
-                      Último Movimento
-                    </span>
-                    {extrairDataUltimoMovimento(getUltimoMovimento(selectedItem)) && (
-                      <span>{extrairDataUltimoMovimento(getUltimoMovimento(selectedItem))}</span>
-                    )}
+                  <p className="text-xs font-black text-black uppercase tracking-wider flex items-center gap-2 mb-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+                    Último Movimento
                   </p>
                   <p className="text-lg font-black text-black leading-snug">
                     {formatarUltimoMovimento(getUltimoMovimento(selectedItem)) || '-'}
@@ -1175,20 +1159,6 @@ export default function App() {
                     <div className="border-[3px] border-black p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-center">
                       <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Situação Geral</p>
                       <p className="text-xl font-black text-[#008080] leading-tight">{getSituacao(selectedItem) || '-'}</p>
-                      {(() => {
-                        const isProcessoModal = ['PL', 'PEC', 'PLC', 'PDL', 'PRC', 'MPV', 'VET', 'MSG', 'PSA'].includes(getNumero(selectedItem).split('/')[0].replace('.', ''));
-                        const sitLower = (getSituacao(selectedItem) || '').toLowerCase();
-                        const ultMovLower = (getUltimoMovimento(selectedItem) || '').toLowerCase();
-                        const isAprovadoLeiModal = isProcessoModal && (sitLower.includes('lei') || sitLower.includes('norma jurídica') || ultMovLower.includes('transformado em lei') || ultMovLower.includes('redação final'));
-                        if (isAprovadoLeiModal && getDataPublicacaoPreLei(selectedItem)) {
-                           return (
-                             <p className="text-[12px] font-bold text-[#008080] mt-2 uppercase">
-                               Publicação Redação Final: {getDataPublicacaoPreLei(selectedItem)}
-                             </p>
-                           );
-                        }
-                        return null;
-                      })()}
                     </div>
                     <div className="border-[3px] border-black p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-center">
                       <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Setor Atual</p>
@@ -1216,11 +1186,11 @@ export default function App() {
 
                       if (isProcessoModal) {
                          const temPalavraVeto = sitLowerModal.includes('veto') || ultMovLowerModal.includes('veto') || obsLowerModal.includes('veto');
-                         const temLinkVeto = parsedLinks.some(l => l.label.toLowerCase().includes('veto'));
+                         const temLinkVeto = parsedLinks.some(l => l.url && l.url.includes('doe.sea.sc.gov.br') || (l.label && l.label.toLowerCase().includes('veto')));
                          if (temPalavraVeto || temLinkVeto) isVetoModal = true;
 
-                         const temPalavraLei = sitLowerModal.includes('lei') || sitLowerModal.includes('norma jurídica') || ultMovLowerModal.includes('transformado em lei') || ultMovLowerModal.includes('redação final');
-                         const temLinkLei = parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+                         const temPalavraLei = sitLowerModal.includes('lei') || sitLowerModal.includes('norma jurídica') || ultMovLowerModal.includes('transformado em lei');
+                         const temLinkLei = parsedLinks.some(l => l.label && (/\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad')));
                          if ((temPalavraLei || temLinkLei) && !isVetoModal) isAprovadoLeiModal = true;
                       }
 
@@ -1293,34 +1263,40 @@ export default function App() {
                   const prefixModal = getNumero(selectedItem).split('/')[0].replace('.', '');
                   const isProcessoModal = ['PL', 'PEC', 'PLC', 'PDL', 'PRC', 'MPV', 'VET', 'MSG', 'PSA'].includes(prefixModal);
 
-                  if (parsedLinks.length > 0 && isProcessoModal) {
+                  if (isProcessoModal) {
                       const sitLowerModal = (getSituacao(selectedItem) || '').toLowerCase();
                       const ultMovLowerModal = (getUltimoMovimento(selectedItem) || '').toLowerCase();
                       const obsLowerModal = (getObservacoes(selectedItem) || '').toLowerCase();
+                      const dataRedacaoFinalModal = selectedItem['Data da Publicação da Redação Final'] || '';
                       
                       let isVetoModal = false;
                       let isAprovadoLeiModal = false;
                       
                       const temPalavraVeto = sitLowerModal.includes('veto') || ultMovLowerModal.includes('veto') || obsLowerModal.includes('veto');
-                      let vetoLinkModal = parsedLinks.find(l => l.label.toLowerCase().includes('veto'));
+                      let vetoLinkModal = parsedLinks.find(l => l.url && l.url.includes('doe.sea.sc.gov.br') || (l.label && l.label.toLowerCase().includes('veto')));
                       if (temPalavraVeto || vetoLinkModal) isVetoModal = true;
                       
-                      const temPalavraLei = sitLowerModal.includes('lei') || sitLowerModal.includes('norma jurídica') || ultMovLowerModal.includes('transformado em lei') || ultMovLowerModal.includes('redação final');
-                      let leiLinkModal = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+                      const temPalavraLei = sitLowerModal.includes('lei') || sitLowerModal.includes('norma jurídica') || ultMovLowerModal.includes('transformado em lei');
+                      let leiLinkModal = parsedLinks.find(l => l.label && (/\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad')));
                       if ((temPalavraLei || leiLinkModal) && !isVetoModal) isAprovadoLeiModal = true;
 
-                      if (isVetoModal && vetoLinkModal) {
-                          if (vetoLinkModal.url) {
-                              return <div className="pt-4 border-t-[3px] border-black border-dashed flex flex-wrap gap-3"><a href={vetoLinkModal.url} target="_blank" rel="noreferrer" className="text-xs font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[3px] border-black px-4 py-2 flex items-center gap-2 hover:bg-red-800 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform hover:-translate-y-1">VETO (DIÁRIO OFICIAL)</a></div>;
-                          } else {
-                              return <div className="pt-4 border-t-[3px] border-black border-dashed flex flex-wrap gap-3"><span className="text-xs font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[3px] border-black px-4 py-2 flex items-center gap-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">VETO REGISTRADO</span></div>;
-                          }
-                      } else if (isAprovadoLeiModal && leiLinkModal) {
-                          if (leiLinkModal.url) {
-                              return <div className="pt-4 border-t-[3px] border-black border-dashed flex flex-wrap gap-3"><a href={leiLinkModal.url} target="_blank" rel="noreferrer" className="text-xs font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[3px] border-black px-4 py-2 flex items-center gap-2 hover:bg-[#0097a7] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform hover:-translate-y-1"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</a></div>;
-                          } else {
-                              return <div className="pt-4 border-t-[3px] border-black border-dashed flex flex-wrap gap-3"><span className="text-xs font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[3px] border-black px-4 py-2 flex items-center gap-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</span></div>;
-                          }
+                      if (isVetoModal) {
+                          return (
+                            <div className="pt-4 border-t-[3px] border-black border-dashed flex flex-wrap gap-3">
+                              <a href={vetoLinkModal && vetoLinkModal.url ? vetoLinkModal.url : '#'} onClick={e => { if(!vetoLinkModal || !vetoLinkModal.url) e.preventDefault(); }} target="_blank" rel="noreferrer" className={`text-xs font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[3px] border-black px-4 py-2 flex items-center gap-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform ${vetoLinkModal && vetoLinkModal.url ? 'hover:bg-red-800 hover:-translate-y-1' : 'opacity-80 cursor-default'}`}>
+                                VETO {vetoLinkModal && vetoLinkModal.url ? '(DIÁRIO OFICIAL)' : '(SEM LINK)'}
+                              </a>
+                            </div>
+                          );
+                      } else if (isAprovadoLeiModal) {
+                          return (
+                            <div className="pt-4 border-t-[3px] border-black border-dashed flex flex-wrap gap-3">
+                              <a href={leiLinkModal && leiLinkModal.url ? leiLinkModal.url : '#'} onClick={e => { if(!leiLinkModal || !leiLinkModal.url) e.preventDefault(); }} target="_blank" rel="noreferrer" className={`text-xs font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[3px] border-black px-4 py-2 flex items-center gap-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform ${leiLinkModal && leiLinkModal.url ? 'hover:bg-[#0097a7] hover:-translate-y-1' : 'opacity-80 cursor-default'}`}>
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><polyline points="20 6 9 17 4 12"/></svg> 
+                                LEI APROVADA {dataRedacaoFinalModal ? `(DO: ${dataRedacaoFinalModal})` : ''}
+                              </a>
+                            </div>
+                          );
                       }
                   }
                   return null;

@@ -22,7 +22,6 @@ export default function App() {
   
   const [showFilters, setShowFilters] = useState(false);
   const [toggleAprovadas, setToggleAprovadas] = useState(false);
-  const [toggleVetos, setToggleVetos] = useState(false); // Novo Botão de Vetos
   const [toggleUtilidade, setToggleUtilidade] = useState(false);
   const [filters, setFilters] = useState({
     tipo: [],
@@ -159,7 +158,6 @@ export default function App() {
      limparFiltrosAvançados();
      setSearchTerm('');
      setToggleAprovadas(false);
-     setToggleVetos(false);
      setToggleUtilidade(false);
   };
 
@@ -190,10 +188,12 @@ export default function App() {
       let isAprovadoLei = false;
 
       if (isProcesso) {
+         // O veto aparece escrito ou o script captou a tag Veto
          const temPalavraVeto = sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto');
          const temLinkVeto = parsedLinks.some(l => l.label.toLowerCase().includes('veto'));
          if (temPalavraVeto || temLinkVeto) isVeto = true;
 
+         // Transformado em Lei: Pega estritamente a frase exata ou a tag injetada pelo script
          const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica') || ultMovLower.includes('transformado em lei') || ultMovLower.includes('redação final');
          const temLinkLei = parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
          if ((temPalavraLei || temLinkLei) && !isVeto) isAprovadoLei = true;
@@ -213,19 +213,25 @@ export default function App() {
       }
 
       if (filters.macro.length > 0 && !filters.macro.includes(macroStatus)) return false;
-
-      // Filtros rápidos via botão
       if (toggleAprovadas && !isAprovadoLei) return false;
-      if (toggleVetos && !isVeto) return false;
       if (toggleUtilidade && !emenLower.includes('utilidade pública')) return false;
 
-      // Filtros exatos da caixa Múltipla
+      // Filtros exatos
       if (filters.tipo.length > 0 && !filters.tipo.includes(getTipoProposicao(item))) return false;
-      if (filters.situacao.length > 0 && !filters.situacao.includes(getSituacao(item))) return false;
+      
+      // Se o usuário clicar em "Veto", busca as correspondências exatas E os vetos arquivados
+      if (filters.situacao.length > 0) {
+          const matchSituacaoExata = filters.situacao.includes(getSituacao(item));
+          const procuraPorVeto = filters.situacao.some(s => s.toLowerCase().includes('veto'));
+          if (!matchSituacaoExata && !(procuraPorVeto && isVeto)) {
+              return false;
+          }
+      }
+
       if (filters.relator.length > 0 && !filters.relator.includes(getRelator(item))) return false;
       if (filters.vista.length > 0 && !filters.vista.includes(getPedidoVista(item))) return false;
 
-      // Busca Universal
+      // Busca Universal ampliada
       const term = searchTerm.toLowerCase();
       if (term) {
         const linksText = parsedLinks.map(l => l.label.toLowerCase()).join(' ');
@@ -327,7 +333,7 @@ export default function App() {
         vista: Array.from(optVista).sort()
       }
     };
-  }, [data, activeTab, searchTerm, toggleAprovadas, toggleVetos, toggleUtilidade, filters]);
+  }, [data, activeTab, searchTerm, toggleAprovadas, toggleUtilidade, filters]);
 
   const handleSort = (key) => {
     setSortConfig((prev) => {
@@ -461,7 +467,6 @@ export default function App() {
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col lg:flex-row gap-6 mb-6">
           
-          {}
           <div className="flex flex-col gap-3 lg:w-1/3">
             <button 
               onClick={() => setToggleAprovadas(!toggleAprovadas)} 
@@ -469,13 +474,6 @@ export default function App() {
             >
               <span>{toggleAprovadas ? '✓ Leis Aprovadas' : 'Leis Aprovadas'}</span>
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" /></svg>
-            </button>
-            <button 
-              onClick={() => setToggleVetos(!toggleVetos)} 
-              className={`px-4 py-4 border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 font-black uppercase text-sm transition-all flex items-center justify-between ${toggleVetos ? 'bg-[#c41e3a] text-white' : 'bg-white text-black'}`}
-            >
-              <span>{toggleVetos ? '✓ Projetos Vetados' : 'Projetos Vetados'}</span>
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
             </button>
             <button 
               onClick={() => setToggleUtilidade(!toggleUtilidade)} 
@@ -529,7 +527,6 @@ export default function App() {
               </div>
             </div>
 
-            {}
             {pieData && pieData.length > 0 && (
               <div className="flex justify-center items-start self-start">
                 <div className="w-24 h-24 md:w-32 md:h-32 flex-shrink-0 rounded-full border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white overflow-hidden">
@@ -580,7 +577,6 @@ export default function App() {
           </div>
         </div>
 
-        {}
         {showFilters && (
           <div className="mb-6 p-6 border-[4px] border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
             <div className="flex justify-between items-center mb-4 border-b-[3px] border-black pb-2">
@@ -604,7 +600,7 @@ export default function App() {
                 </div>
               </div>
               <div className="flex flex-col gap-2">
-                <p className="text-xs font-black uppercase text-gray-500 tracking-wider">Situação (Literal)</p>
+                <p className="text-xs font-black uppercase text-gray-500 tracking-wider">Situação</p>
                 <div className="max-h-40 overflow-y-auto pr-2 custom-scrollbar flex flex-col gap-1.5">
                   {filterOptions.situacao.map(opt => (
                     <label key={opt} className="flex items-start gap-2 cursor-pointer group">
@@ -641,7 +637,6 @@ export default function App() {
           </div>
         )}
 
-        {}
         <div className="flex flex-col md:flex-row gap-4 mb-8">
           <div className="flex-1 relative flex border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white focus-within:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] focus-within:-translate-y-0.5 transition-all">
             <div className={`w-4 border-r-[4px] border-black ${activeTab === 'processo' ? MONDRIAN_COLORS[0] : MONDRIAN_COLORS[1]}`}></div>
@@ -664,7 +659,6 @@ export default function App() {
           </div>
         </div>
 
-        {}
         {loading && (
           <div className="flex flex-col items-center justify-center p-20 border-[6px] border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] gap-6">
             <svg className="animate-spin w-16 h-16 flex-shrink-0" viewBox="0 0 100 100">
@@ -686,7 +680,6 @@ export default function App() {
           </div>
         )}
 
-        {}
         {!loading && !error && viewMode === 'card' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {sortedFilteredData.map((item, index) => {
@@ -905,7 +898,6 @@ export default function App() {
           </div>
         )}
 
-        {}
         {!loading && !error && viewMode === 'list' && (
           <div className="flex flex-col gap-4">
             
@@ -1114,7 +1106,6 @@ export default function App() {
           </div>
         )}
 
-        {}
         {selectedItem && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setSelectedItem(null)}>
             <div className="bg-white border-[6px] border-black shadow-[12px_12px_0px_0px_rgba(255,219,88,1)] w-full max-w-4xl max-h-[90vh] flex flex-col relative" onClick={e => e.stopPropagation()}>

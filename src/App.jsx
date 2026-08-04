@@ -422,6 +422,76 @@ export default function App() {
     setFilters({ tipo: [], situacao: [], relator: [], vista: [], macro: [] });
   };
 
+  const exportToCSV = () => {
+    if (sortedFilteredData.length === 0) {
+      showToast("Nenhum dado filtrado para exportar.");
+      return;
+    }
+
+    const headers = [
+      'NÚMERO DA LEI APROVADA',
+      'DATA DA LEI APROVADA',
+      'TEMAS',
+      'OBSERVAÇÃO',
+      'LINK',
+      'MANDATO',
+      'PROJETO DE LEI',
+      'DATA DE VIGÊNCIA',
+      'ATORES ENVOLVIDOS'
+    ];
+
+    const escapeCSV = (str) => {
+      if (str === null || str === undefined) return '""';
+      const stringified = String(str);
+      const escaped = stringified.replace(/"/g, '""');
+      return `"${escaped}"`;
+    };
+
+    const rows = sortedFilteredData.map(item => {
+      let numLei = '';
+      const sit = getSituacao(item) || '';
+      const match = sit.match(/(?:Lei|Norma Jurídica).*?(\d+)/i);
+      if (match) {
+         numLei = match[1];
+      }
+
+      let dataLei = getDataPublicacaoPreLei(item) || '';
+      
+      let linkDaLei = getLink(item) || '';
+      try {
+        const rawLinks = getLinksAdicionais(item);
+        if (rawLinks && rawLinks !== '-') {
+          const parsed = JSON.parse(rawLinks);
+          const leiLink = parsed.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+          if (leiLink && leiLink.url) linkDaLei = leiLink.url;
+        }
+      } catch(e) {}
+
+      return [
+        escapeCSV(numLei),                             // A - NÚMERO DA LEI APROVADA
+        escapeCSV(dataLei),                            // B - DATA DA LEI APROVADA
+        escapeCSV(''),                                 // C - TEMAS
+        escapeCSV(getObservacoes(item)),               // D - OBSERVAÇÃO
+        escapeCSV(linkDaLei),                          // E - LINK
+        escapeCSV('Deputado Estadual'),                // F - MANDATO
+        escapeCSV(getNumero(item)),                    // G - PROJETO DE LEI
+        escapeCSV(''),                                 // H - DATA DE VIGÊNCIA
+        escapeCSV('')                                  // I - ATORES ENVOLVIDOS
+      ].join(',');
+    });
+
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    // Adiciona o BOM para o Excel ler acentos corretamente
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", "projetos_exportados.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const barConfig = activeTab === 'processo' ? [
     { key: 'Aprovados', label: 'APRO', color: 'bg-[#008080]' },
     { key: 'Em Tramitação', label: 'TRAM', color: 'bg-[#ffdb58]' },
@@ -479,6 +549,7 @@ export default function App() {
         </div>
       </div>
 
+      {}
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col lg:flex-row gap-6 mb-6">
           
@@ -601,6 +672,7 @@ export default function App() {
           </div>
         </div>
 
+        {}
         {showFilters && (
           <div className="mb-6 p-6 border-[4px] border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
             <div className="flex justify-between items-center mb-4 border-b-[3px] border-black pb-2">
@@ -661,6 +733,7 @@ export default function App() {
           </div>
         )}
 
+        {}
         <div className="flex flex-col md:flex-row gap-4 mb-8">
           <div className="flex-1 relative flex border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white focus-within:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] focus-within:-translate-y-0.5 transition-all">
             <div className={`w-4 border-r-[4px] border-black ${activeTab === 'processo' ? MONDRIAN_COLORS[0] : MONDRIAN_COLORS[1]}`}></div>
@@ -680,9 +753,14 @@ export default function App() {
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
               Lista
             </button>
+            <div className="w-[4px] bg-black"></div>
+            <button onClick={exportToCSV} className="flex-1 md:flex-none px-4 py-4 font-black uppercase flex items-center justify-center gap-2 transition-colors hover:bg-[#008080] hover:text-white group" title="Exportar visualização atual para CSV">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="group-hover:animate-bounce"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+            </button>
           </div>
         </div>
 
+        {}
         {loading && (
           <div className="flex flex-col items-center justify-center p-20 border-[6px] border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] gap-6">
             <svg className="animate-spin w-16 h-16 flex-shrink-0" viewBox="0 0 100 100">
@@ -922,6 +1000,7 @@ export default function App() {
           </div>
         )}
 
+        {}
         {!loading && !error && viewMode === 'list' && (
           <div className="flex flex-col gap-4">
             
@@ -1128,6 +1207,7 @@ export default function App() {
           </div>
         )}
         
+        {}
         {!loading && !error && filteredData.length === 0 && (
           <div className="text-center p-12 border-[5px] border-black bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
             <h3 className="text-2xl font-black uppercase">Nenhum resultado nesta aba.</h3>

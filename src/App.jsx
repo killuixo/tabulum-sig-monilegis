@@ -203,7 +203,7 @@ export default function App() {
       if (activeTab === 'processo') {
         if (isAprovadoLei) macroStatus = 'Aprovados';
         else if (isVeto) macroStatus = 'Vetados';
-        else if (sitLower.includes('arquivad') || sitLower.includes('rejeitad') || sitLower.includes('retirad') || sitLower.includes('concluíd')) macroStatus = 'Encerrados';
+        else if (sitLower.includes('arquivad') || sitLower.includes('rejeitad') || sitLower.includes('retirad') || sitLower.includes('concluíd') || sitLower.includes('encerrad')) macroStatus = 'Encerrados';
         else macroStatus = 'Em Tramitação';
       } else {
         if (sitLower.includes('arquivad') || sitLower.includes('encerrad') || sitLower.includes('concluíd')) macroStatus = 'Arquivados';
@@ -297,7 +297,7 @@ export default function App() {
 
          if (isAprovadoLei) macroStatus = 'Aprovados';
          else if (isVeto) macroStatus = 'Vetados';
-         else if (sitLower.includes('arquivad') || sitLower.includes('rejeitad') || sitLower.includes('retirad') || sitLower.includes('concluíd')) macroStatus = 'Encerrados';
+         else if (sitLower.includes('arquivad') || sitLower.includes('rejeitad') || sitLower.includes('retirad') || sitLower.includes('concluíd') || sitLower.includes('encerrad')) macroStatus = 'Encerrados';
          else macroStatus = 'Em Tramitação';
       } else {
          if (sitLower.includes('arquivad') || sitLower.includes('encerrad') || sitLower.includes('concluíd')) macroStatus = 'Arquivados';
@@ -412,20 +412,28 @@ export default function App() {
          const parsed = JSON.parse(rawLinks);
          const lei = parsed.find(l => l.numeroLei);
          if (lei && lei.numeroLei) return lei.numeroLei;
+         
+         // Fallback extra para capturar diretamente no lado do React se os dados antigos tiverem a URL
+         const leiLink = parsed.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+         if (leiLink && leiLink.url) {
+             const matchUrl = leiLink.url.match(/\/(\d+)_/);
+             if (matchUrl) return matchUrl[1];
+         }
       }
     } catch(e) {}
 
+    // Fallback caso não venha no link (tenta regex clássica nas outras colunas)
     const sit = getSituacao(item) || '';
     const ultMov = getUltimoMovimento(item) || '';
     const obs = getObservacoes(item) || '';
     const regex = /(?:Lei|Norma Jurídica)(?:\s*(?:n[º°o.]|número)?\s*)(\d+)/i;
     
     let match = sit.match(regex);
-    if (match) return match[1];
+    if (match && match[1]) return match[1].replace(/\./g, '');
     match = ultMov.match(regex);
-    if (match) return match[1];
+    if (match && match[1]) return match[1].replace(/\./g, '');
     match = obs.match(regex);
-    if (match) return match[1];
+    if (match && match[1]) return match[1].replace(/\./g, '');
     return '';
   };
 
@@ -436,15 +444,14 @@ export default function App() {
     }
 
     const headers = [
+      'NÚMERO DO PL',
+      'SITUAÇÃO',
+      'EMENTA',
+      'TEMA',
       'NÚMERO DA LEI APROVADA',
       'DATA DA LEI APROVADA',
-      'TEMAS',
-      'OBSERVAÇÃO',
-      'LINK',
-      'MANDATO',
-      'PROJETO DE LEI',
-      'DATA DE VIGÊNCIA',
-      'ATORES ENVOLVIDOS'
+      'LINK DA LEI APROVADA',
+      'OBSERVAÇÃO'
     ];
 
     const escapeCSV = (str) => {
@@ -455,32 +462,59 @@ export default function App() {
     };
 
     const rows = sortedFilteredData.map(item => {
-      let numLei = extrairNumeroLei(item);
+      let numProj = getNumero(item) || '';
+      let ementa = getEmenta(item) || '';
+      let obs = getObservacoes(item) || '';
+      let numLei = extrairNumeroLei(item) || '';
       let dataLei = getDataPublicacaoPreLei(item) || '';
-      
       let linkDaLei = '';
+      
+      const sitLower = getSituacao(item).toLowerCase();
+      const ultMovLower = getUltimoMovimento(item).toLowerCase();
+      const obsLower = getObservacoes(item).toLowerCase();
+
+      let parsedLinks = [];
       try {
         const rawLinks = getLinksAdicionais(item);
-        if (rawLinks && rawLinks !== '-') {
-           const parsedLinks = JSON.parse(rawLinks);
-           const leiLink = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
-           if (leiLink && leiLink.url) linkDaLei = leiLink.url;
-        }
+        if (rawLinks && rawLinks !== '-') parsedLinks = JSON.parse(rawLinks);
       } catch(e) {}
+      
+      let isVeto = false;
+      let isAprovadoLei = false;
 
-      let obs = getObservacoes(item) || '';
-      let numProj = getNumero(item) || '';
+      const temPalavraVeto = sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto');
+      const temLinkVeto = parsedLinks.some(l => l.label.toLowerCase().includes('veto'));
+      if (temPalavraVeto || temLinkVeto) isVeto = true;
+
+      const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica') || ultMovLower.includes('transformado em lei') || ultMovLower.includes('redação final');
+      const temLinkLei = parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+      if ((temPalavraLei || temLinkLei) && !isVeto) isAprovadoLei = true;
+
+      if (isAprovadoLei) {
+        const leiLinkObj = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
+        if (leiLinkObj && leiLinkObj.url) linkDaLei = leiLinkObj.url;
+      }
+
+      let situacaoCsv = '';
+      if (isAprovadoLei) {
+          situacaoCsv = 'Aprovado';
+      } else if (isVeto) {
+          situacaoCsv = 'Vetado';
+      } else if (sitLower.includes('arquivad') || sitLower.includes('rejeitad') || sitLower.includes('retirad') || sitLower.includes('concluíd') || sitLower.includes('encerrad')) {
+          situacaoCsv = 'Parecer Contrário';
+      } else {
+          situacaoCsv = 'Em tramitação';
+      }
 
       return [
+        escapeCSV(numProj),
+        escapeCSV(situacaoCsv),
+        escapeCSV(ementa),
+        '""', // TEMA (deixar em branco)
         escapeCSV(numLei),
         escapeCSV(dataLei),
-        '""', 
-        escapeCSV(obs),
         escapeCSV(linkDaLei),
-        '"Deputado Estadual"',
-        escapeCSV(numProj),
-        '""', 
-        '""'  
+        escapeCSV(obs)
       ].join(',');
     });
 
@@ -489,7 +523,7 @@ export default function App() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", "exportacao_leis.csv");
+    link.setAttribute("download", "exportacao_tabulum.csv");
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1056,6 +1090,7 @@ export default function App() {
 
         {!loading && !error && viewMode === 'list' && (
           <div className="flex flex-col gap-4">
+            
             {sortedFilteredData.map((item, index) => {
               const numeroProp = getNumero(item) || 'S/N';
               const ementaProp = getEmenta(item);

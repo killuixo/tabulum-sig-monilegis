@@ -22,6 +22,7 @@ export default function App() {
   
   const [showFilters, setShowFilters] = useState(false);
   const [toggleAprovadas, setToggleAprovadas] = useState(false);
+  const [toggleExcetoAprovadas, setToggleExcetoAprovadas] = useState(false);
   const [toggleUtilidade, setToggleUtilidade] = useState(false);
   const [filters, setFilters] = useState({
     tipo: [],
@@ -82,21 +83,6 @@ export default function App() {
   };
   const getDataPublicacaoPreLei = (item) => {
       return item['Data da Publicação da Redação Final'] || item['Data Publicação Pré-Lei'] || '';
-  };
-
-  const extrairNumeroLei = (item) => {
-    const sit = getSituacao(item) || '';
-    const ultMov = getUltimoMovimento(item) || '';
-    const obs = getObservacoes(item) || '';
-    const regex = /(?:Lei|Norma Jurídica)(?:\s*(?:n[º°o.]|número)?\s*)(\d+)/i;
-    
-    let match = sit.match(regex);
-    if (match) return match[1];
-    match = ultMov.match(regex);
-    if (match) return match[1];
-    match = obs.match(regex);
-    if (match) return match[1];
-    return '';
   };
 
   const API_URL = (() => {
@@ -173,6 +159,7 @@ export default function App() {
      limparFiltrosAvançados();
      setSearchTerm('');
      setToggleAprovadas(false);
+     setToggleExcetoAprovadas(false);
      setToggleUtilidade(false);
   };
 
@@ -226,8 +213,8 @@ export default function App() {
       }
 
       if (filters.macro.length > 0 && !filters.macro.includes(macroStatus)) return false;
-      
       if (toggleAprovadas && !isAprovadoLei) return false;
+      if (toggleExcetoAprovadas && isAprovadoLei) return false;
       if (toggleUtilidade && !emenLower.includes('utilidade pública')) return false;
 
       if (filters.tipo.length > 0 && !filters.tipo.includes(getTipoProposicao(item))) return false;
@@ -344,7 +331,7 @@ export default function App() {
         vista: Array.from(optVista).sort()
       }
     };
-  }, [data, activeTab, searchTerm, toggleAprovadas, toggleUtilidade, filters]);
+  }, [data, activeTab, searchTerm, toggleAprovadas, toggleExcetoAprovadas, toggleUtilidade, filters]);
 
   const handleSort = (key) => {
     setSortConfig((prev) => {
@@ -416,6 +403,30 @@ export default function App() {
         : [...current, value];
       return { ...prev, [category]: updated };
     });
+  };
+
+  const extrairNumeroLei = (item) => {
+    try {
+      const rawLinks = getLinksAdicionais(item);
+      if (rawLinks && rawLinks !== '-') {
+         const parsed = JSON.parse(rawLinks);
+         const lei = parsed.find(l => l.numeroLei);
+         if (lei && lei.numeroLei) return lei.numeroLei;
+      }
+    } catch(e) {}
+
+    const sit = getSituacao(item) || '';
+    const ultMov = getUltimoMovimento(item) || '';
+    const obs = getObservacoes(item) || '';
+    const regex = /(?:Lei|Norma Jurídica)(?:\s*(?:n[º°o.]|número)?\s*)(\d+)/i;
+    
+    let match = sit.match(regex);
+    if (match) return match[1];
+    match = ultMov.match(regex);
+    if (match) return match[1];
+    match = obs.match(regex);
+    if (match) return match[1];
+    return '';
   };
 
   const exportToCSV = () => {
@@ -557,16 +568,27 @@ export default function App() {
         <div className="flex flex-col lg:flex-row gap-6 mb-6">
           
           <div className="flex flex-col gap-3 lg:w-1/3">
-            <button 
-              onClick={() => {
-                if (!toggleAprovadas) setFilters(prev => ({...prev, macro: []}));
-                setToggleAprovadas(!toggleAprovadas);
-              }} 
-              className={`px-4 py-4 border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 font-black uppercase text-sm transition-all flex items-center justify-between ${toggleAprovadas ? 'bg-[#008080] text-white' : 'bg-white text-black'}`}
-            >
-              <span>{toggleAprovadas ? '✓ Apenas Aprovados' : 'Apenas Aprovados'}</span>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" /></svg>
-            </button>
+            <div className="flex gap-2 w-full">
+              <button 
+                onClick={() => {
+                  if (!toggleAprovadas) setFilters(prev => ({...prev, macro: []}));
+                  setToggleAprovadas(!toggleAprovadas);
+                  if (!toggleAprovadas) setToggleExcetoAprovadas(false);
+                }} 
+                className={`flex-1 px-3 py-4 border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 font-black uppercase text-[11px] transition-all flex items-center justify-center ${toggleAprovadas ? 'bg-[#008080] text-white' : 'bg-white text-black'}`}
+              >
+                <span>{toggleAprovadas ? '✓ APENAS LEIS' : 'APENAS LEIS'}</span>
+              </button>
+              <button 
+                onClick={() => {
+                  setToggleExcetoAprovadas(!toggleExcetoAprovadas);
+                  if (!toggleExcetoAprovadas) setToggleAprovadas(false);
+                }} 
+                className={`flex-1 px-3 py-4 border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 font-black uppercase text-[11px] transition-all flex items-center justify-center ${toggleExcetoAprovadas ? 'bg-[#c41e3a] text-white' : 'bg-white text-black'}`}
+              >
+                <span>{toggleExcetoAprovadas ? '✓ EXCETO LEIS' : 'EXCETO LEIS'}</span>
+              </button>
+            </div>
             <button 
               onClick={() => setToggleUtilidade(!toggleUtilidade)} 
               className={`px-4 py-4 border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 font-black uppercase text-sm transition-all flex items-center justify-between ${toggleUtilidade ? 'bg-[#ffdb58] text-black' : 'bg-white text-black'}`}
@@ -775,6 +797,42 @@ export default function App() {
           </div>
         )}
 
+        {/* CABEÇALHO DE ORDENAÇÃO UNIVERSAL - VISÍVEL EM AMBAS AS VIEWS */}
+        {!loading && !error && sortedFilteredData.length > 0 && (
+          <div className="hidden md:flex flex-row bg-black text-white border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] mb-6">
+            <div className="w-4 border-r-[4px] border-black flex-shrink-0"></div>
+            <div className="p-4 flex-grow flex flex-row gap-6 items-center">
+              
+              <div className="md:w-32 flex-shrink-0 cursor-pointer hover:text-[#ffdb58] flex items-center gap-1 font-black uppercase text-[11px]" onClick={() => handleSort('numero')}>
+                PROPOSIÇÃO {sortConfig.key === 'numero' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+              </div>
+              
+              <div className="flex-grow grid grid-cols-12 gap-4 w-full">
+                <div className="col-span-4 cursor-pointer hover:text-[#ffdb58] flex items-center gap-1 font-black uppercase text-[11px]" onClick={() => handleSort('movimento')}>
+                  ÚLTIMO MOV. {sortConfig.key === 'movimento' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                </div>
+                <div className="col-span-5 cursor-pointer hover:text-[#ffdb58] flex items-center gap-1 font-black uppercase text-[11px]" onClick={() => handleSort('ementa')}>
+                  EMENTA {sortConfig.key === 'ementa' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                </div>
+                <div className="col-span-3">
+                   <div className="cursor-pointer hover:text-[#ffdb58] flex items-center gap-1 font-black uppercase text-[11px] mb-1" onClick={() => handleSort('situacao')}>
+                     SITUAÇÃO / SETOR {sortConfig.key === 'situacao' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                   </div>
+                   {activeTab === 'processo' && (
+                     <div className="cursor-pointer hover:text-[#008080] flex items-center gap-1 font-black uppercase text-[9px] text-gray-300" onClick={() => handleSort('publicacao')}>
+                       PUB. REDAÇÃO FINAL {sortConfig.key === 'publicacao' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                     </div>
+                   )}
+                </div>
+              </div>
+
+              <div className="w-64 flex-shrink-0 pl-4 border-l-[3px] border-transparent font-black uppercase text-[11px]">
+                NOTAS INTERNAS
+              </div>
+            </div>
+          </div>
+        )}
+
         {!loading && !error && viewMode === 'card' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {sortedFilteredData.map((item, index) => {
@@ -976,11 +1034,11 @@ export default function App() {
                               } else if (isAprovadoLei && leiLink) {
                                   const numLei = extrairNumeroLei(item);
                                   const leiLabel = numLei ? <span className="text-[12px] font-black text-gray-800 flex items-center ml-1">Nº {numLei}</span> : null;
-                                  
+
                                   if (leiLink.url) {
-                                      return <div className="flex items-center gap-1"><a href={leiLink.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-2 border-black px-2 py-1 flex items-center gap-1 hover:bg-[#0097a7] transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</a>{leiLabel}</div>;
+                                      return <div className="flex items-center"><a href={leiLink.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-2 border-black px-2 py-1 flex items-center gap-1 hover:bg-[#0097a7] transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</a>{leiLabel}</div>;
                                   } else {
-                                      return <div className="flex items-center gap-1"><span className="text-[10px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-2 border-black px-2 py-1 flex items-center gap-1 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</span>{leiLabel}</div>;
+                                      return <div className="flex items-center"><span className="text-[10px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-2 border-black px-2 py-1 flex items-center gap-1 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</span>{leiLabel}</div>;
                                   }
                               }
                               return null;
@@ -998,42 +1056,6 @@ export default function App() {
 
         {!loading && !error && viewMode === 'list' && (
           <div className="flex flex-col gap-4">
-            
-            {sortedFilteredData.length > 0 && (
-              <div className="hidden md:flex flex-row bg-black text-white border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] mb-2 mt-2">
-                <div className="w-4 border-r-[4px] border-black flex-shrink-0"></div>
-                <div className="p-4 flex-grow flex flex-row gap-6 items-center">
-                  
-                  <div className="md:w-32 flex-shrink-0 cursor-pointer hover:text-[#ffdb58] flex items-center gap-1 font-black uppercase text-[11px]" onClick={() => handleSort('numero')}>
-                    PROPOSIÇÃO {sortConfig.key === 'numero' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-                  </div>
-                  
-                  <div className="flex-grow grid grid-cols-12 gap-4 w-full">
-                    <div className="col-span-4 cursor-pointer hover:text-[#ffdb58] flex items-center gap-1 font-black uppercase text-[11px]" onClick={() => handleSort('movimento')}>
-                      ÚLTIMO MOV. {sortConfig.key === 'movimento' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-                    </div>
-                    <div className="col-span-5 cursor-pointer hover:text-[#ffdb58] flex items-center gap-1 font-black uppercase text-[11px]" onClick={() => handleSort('ementa')}>
-                      EMENTA {sortConfig.key === 'ementa' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-                    </div>
-                    <div className="col-span-3">
-                       <div className="cursor-pointer hover:text-[#ffdb58] flex items-center gap-1 font-black uppercase text-[11px] mb-1" onClick={() => handleSort('situacao')}>
-                         SITUAÇÃO / SETOR {sortConfig.key === 'situacao' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-                       </div>
-                       {activeTab === 'processo' && (
-                         <div className="cursor-pointer hover:text-[#008080] flex items-center gap-1 font-black uppercase text-[9px] text-gray-300" onClick={() => handleSort('publicacao')}>
-                           PUB. REDAÇÃO FINAL {sortConfig.key === 'publicacao' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-                         </div>
-                       )}
-                    </div>
-                  </div>
-
-                  <div className="w-64 flex-shrink-0 pl-4 border-l-[3px] border-transparent font-black uppercase text-[11px]">
-                    NOTAS INTERNAS
-                  </div>
-                </div>
-              </div>
-            )}
-
             {sortedFilteredData.map((item, index) => {
               const numeroProp = getNumero(item) || 'S/N';
               const ementaProp = getEmenta(item);
@@ -1187,11 +1209,11 @@ export default function App() {
                               } else if (isAprovadoLei && leiLink) {
                                   const numLei = extrairNumeroLei(item);
                                   const leiLabel = numLei ? <span className="text-[10px] font-black text-gray-800 flex items-center ml-1">Nº {numLei}</span> : null;
-                                  
+
                                   if (leiLink.url) {
-                                      return <div className="flex items-center gap-1"><a href={leiLink.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[8px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:bg-[#0097a7]">LEI APROVADA</a>{leiLabel}</div>;
+                                      return <div className="flex items-center"><a href={leiLink.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[8px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:bg-[#0097a7]">LEI APROVADA</a>{leiLabel}</div>;
                                   } else {
-                                      return <div className="flex items-center gap-1"><span className="text-[8px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">LEI APROVADA</span>{leiLabel}</div>;
+                                      return <div className="flex items-center"><span className="text-[8px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">LEI APROVADA</span>{leiLabel}</div>;
                                   }
                               }
                               return null;
@@ -1410,8 +1432,8 @@ export default function App() {
                           }
                       } else if (isAprovadoLeiModal && leiLinkModal) {
                           const numLei = extrairNumeroLei(selectedItem);
-                          const leiLabel = numLei ? <span className="text-[15px] font-black text-gray-800 flex items-center">Nº {numLei}</span> : null;
-                          
+                          const leiLabel = numLei ? <span className="text-[15px] font-black text-gray-800 flex items-center ml-2">Nº {numLei}</span> : null;
+
                           if (leiLinkModal.url) {
                               return <div className="pt-4 border-t-[3px] border-black border-dashed flex flex-wrap gap-3 items-center"><a href={leiLinkModal.url} target="_blank" rel="noreferrer" className="text-xs font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[3px] border-black px-4 py-2 flex items-center gap-2 hover:bg-[#0097a7] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform hover:-translate-y-1"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</a>{leiLabel}</div>;
                           } else {

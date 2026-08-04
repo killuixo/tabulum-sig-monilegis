@@ -6,7 +6,6 @@ const MONDRIAN_COLORS = [
   'bg-[#ffdb58]', // Mostarda
 ];
 
-// Paleta expandida para os diversos tipos de proposição no gráfico de pizza
 const PIE_COLORS = [
   '#008080', '#c41e3a', '#ffdb58', '#2b2b2b', '#8a2be2', 
   '#e67e22', '#16a085', '#d35400', '#2980b9', '#7f8c8d', '#8e44ad'
@@ -23,6 +22,7 @@ export default function App() {
   
   const [showFilters, setShowFilters] = useState(false);
   const [toggleAprovadas, setToggleAprovadas] = useState(false);
+  const [toggleVetos, setToggleVetos] = useState(false); // Novo Botão de Vetos
   const [toggleUtilidade, setToggleUtilidade] = useState(false);
   const [filters, setFilters] = useState({
     tipo: [],
@@ -37,8 +37,6 @@ export default function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [toastMsg, setToastMsg] = useState(''); 
   const [selectedItem, setSelectedItem] = useState(null);
-
-  // Configuração de Ordenação da Lista
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
 
   const formatarData = (dataString) => {
@@ -161,6 +159,7 @@ export default function App() {
      limparFiltrosAvançados();
      setSearchTerm('');
      setToggleAprovadas(false);
+     setToggleVetos(false);
      setToggleUtilidade(false);
   };
 
@@ -192,10 +191,9 @@ export default function App() {
 
       if (isProcesso) {
          const temPalavraVeto = sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto');
-         const temLinkVeto = parsedLinks.some(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
+         const temLinkVeto = parsedLinks.some(l => l.label.toLowerCase().includes('veto'));
          if (temPalavraVeto || temLinkVeto) isVeto = true;
 
-         // AVALIA SE É LEI DE FORMA AMPLA (Situação, Último Movimento ou Links)
          const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica') || ultMovLower.includes('transformado em lei') || ultMovLower.includes('redação final');
          const temLinkLei = parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
          if ((temPalavraLei || temLinkLei) && !isVeto) isAprovadoLei = true;
@@ -216,16 +214,21 @@ export default function App() {
 
       if (filters.macro.length > 0 && !filters.macro.includes(macroStatus)) return false;
 
+      // Filtros rápidos via botão
       if (toggleAprovadas && !isAprovadoLei) return false;
+      if (toggleVetos && !isVeto) return false;
       if (toggleUtilidade && !emenLower.includes('utilidade pública')) return false;
 
+      // Filtros exatos da caixa Múltipla
       if (filters.tipo.length > 0 && !filters.tipo.includes(getTipoProposicao(item))) return false;
       if (filters.situacao.length > 0 && !filters.situacao.includes(getSituacao(item))) return false;
       if (filters.relator.length > 0 && !filters.relator.includes(getRelator(item))) return false;
       if (filters.vista.length > 0 && !filters.vista.includes(getPedidoVista(item))) return false;
 
+      // Busca Universal
       const term = searchTerm.toLowerCase();
       if (term) {
+        const linksText = parsedLinks.map(l => l.label.toLowerCase()).join(' ');
         return num.toLowerCase().includes(term) || 
                getRelator(item).toLowerCase().includes(term) || 
                sitLower.includes(term) || 
@@ -234,7 +237,11 @@ export default function App() {
                (item['Data de entrada'] || '').toLowerCase().includes(term) ||
                getSetor(item).toLowerCase().includes(term) ||
                (item['Data de Distribuição'] || '').toLowerCase().includes(term) ||
-               getTipoProposicao(item).toLowerCase().includes(term);
+               getTipoProposicao(item).toLowerCase().includes(term) ||
+               macroStatus.toLowerCase().includes(term) ||
+               ultMovLower.includes(term) ||
+               obsLower.includes(term) ||
+               linksText.includes(term);
       }
       
       return true;
@@ -277,7 +284,7 @@ export default function App() {
          let isAprovadoLei = false;
 
          const temPalavraVeto = sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto');
-         const temLinkVeto = parsedLinks.some(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
+         const temLinkVeto = parsedLinks.some(l => l.label.toLowerCase().includes('veto'));
          if (temPalavraVeto || temLinkVeto) isVeto = true;
 
          const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica') || ultMovLower.includes('transformado em lei') || ultMovLower.includes('redação final');
@@ -320,14 +327,14 @@ export default function App() {
         vista: Array.from(optVista).sort()
       }
     };
-  }, [data, activeTab, searchTerm, toggleAprovadas, toggleUtilidade, filters]);
+  }, [data, activeTab, searchTerm, toggleAprovadas, toggleVetos, toggleUtilidade, filters]);
 
   const handleSort = (key) => {
     setSortConfig((prev) => {
       if (prev.key === key) {
         return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
       }
-      return { key, direction: 'desc' }; // Padrão desc para datas e números
+      return { key, direction: 'desc' };
     });
   };
 
@@ -368,7 +375,6 @@ export default function App() {
         bVal = getSituacao(b) || '';
         return sortConfig.direction === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
       }
-
       return 0;
     });
   }, [filteredData, sortConfig]);
@@ -412,7 +418,6 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#f8f9fa] text-black font-sans p-4 md:p-8 selection:bg-[#ffdb58] selection:text-black">
       
-      {/* CABEÇALHO TABULUM */}
       <div className="max-w-7xl mx-auto mb-8">
         <div className="border-[6px] border-black bg-white grid grid-cols-1 md:grid-cols-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
           <div className="md:col-span-3 p-6 md:p-10 border-b-[6px] md:border-b-0 md:border-r-[6px] border-black flex flex-row items-center gap-4 md:gap-8">
@@ -453,11 +458,10 @@ export default function App() {
         </div>
       </div>
 
-      {/* DASHBOARD PRINCIPAL */}
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col lg:flex-row gap-6 mb-6">
           
-          {/* BOTÕES DE FILTRO RÁPIDO */}
+          {}
           <div className="flex flex-col gap-3 lg:w-1/3">
             <button 
               onClick={() => setToggleAprovadas(!toggleAprovadas)} 
@@ -465,6 +469,13 @@ export default function App() {
             >
               <span>{toggleAprovadas ? '✓ Leis Aprovadas' : 'Leis Aprovadas'}</span>
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" /></svg>
+            </button>
+            <button 
+              onClick={() => setToggleVetos(!toggleVetos)} 
+              className={`px-4 py-4 border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 font-black uppercase text-sm transition-all flex items-center justify-between ${toggleVetos ? 'bg-[#c41e3a] text-white' : 'bg-white text-black'}`}
+            >
+              <span>{toggleVetos ? '✓ Projetos Vetados' : 'Projetos Vetados'}</span>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
             </button>
             <button 
               onClick={() => setToggleUtilidade(!toggleUtilidade)} 
@@ -482,7 +493,6 @@ export default function App() {
             </button>
           </div>
 
-          {/* ESTATÍSTICAS E GRÁFICOS */}
           <div className="flex-1 border-[4px] border-black p-4 md:p-6 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white flex flex-col sm:flex-row gap-6 items-start">
             
             <div className="flex-1 flex flex-col gap-5 w-full">
@@ -519,6 +529,7 @@ export default function App() {
               </div>
             </div>
 
+            {}
             {pieData && pieData.length > 0 && (
               <div className="flex justify-center items-start self-start">
                 <div className="w-24 h-24 md:w-32 md:h-32 flex-shrink-0 rounded-full border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white overflow-hidden">
@@ -569,7 +580,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* ÁREA DE FILTROS AVANÇADOS */}
+        {}
         {showFilters && (
           <div className="mb-6 p-6 border-[4px] border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
             <div className="flex justify-between items-center mb-4 border-b-[3px] border-black pb-2">
@@ -593,7 +604,7 @@ export default function App() {
                 </div>
               </div>
               <div className="flex flex-col gap-2">
-                <p className="text-xs font-black uppercase text-gray-500 tracking-wider">Situação</p>
+                <p className="text-xs font-black uppercase text-gray-500 tracking-wider">Situação (Literal)</p>
                 <div className="max-h-40 overflow-y-auto pr-2 custom-scrollbar flex flex-col gap-1.5">
                   {filterOptions.situacao.map(opt => (
                     <label key={opt} className="flex items-start gap-2 cursor-pointer group">
@@ -630,14 +641,14 @@ export default function App() {
           </div>
         )}
 
-        {/* BARRA DE PESQUISA E VISÃO */}
+        {}
         <div className="flex flex-col md:flex-row gap-4 mb-8">
           <div className="flex-1 relative flex border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white focus-within:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] focus-within:-translate-y-0.5 transition-all">
             <div className={`w-4 border-r-[4px] border-black ${activeTab === 'processo' ? MONDRIAN_COLORS[0] : MONDRIAN_COLORS[1]}`}></div>
             <div className="p-4 flex items-center justify-center border-r-[4px] border-black">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
             </div>
-            <input type="text" placeholder="Busca Universal (Número, ementa, relator...)" className="w-full p-4 text-xl font-bold outline-none placeholder-gray-400" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+            <input type="text" placeholder="Busca Universal (Número, ementa, relator, veto...)" className="w-full p-4 text-xl font-bold outline-none placeholder-gray-400" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
           </div>
 
           <div className="flex border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white self-stretch">
@@ -653,6 +664,7 @@ export default function App() {
           </div>
         </div>
 
+        {}
         {loading && (
           <div className="flex flex-col items-center justify-center p-20 border-[6px] border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] gap-6">
             <svg className="animate-spin w-16 h-16 flex-shrink-0" viewBox="0 0 100 100">
@@ -674,6 +686,7 @@ export default function App() {
           </div>
         )}
 
+        {}
         {!loading && !error && viewMode === 'card' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {sortedFilteredData.map((item, index) => {
@@ -705,10 +718,9 @@ export default function App() {
 
               if (isProcesso) {
                  const temPalavraVeto = sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto');
-                 vetoLink = parsedLinks.find(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
+                 vetoLink = parsedLinks.find(l => l.label.toLowerCase().includes('veto'));
                  if (temPalavraVeto || vetoLink) isVeto = true;
 
-                 // AVALIA SE É LEI DE FORMA AMPLA
                  const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica') || ultMovLower.includes('transformado em lei') || ultMovLower.includes('redação final');
                  leiLink = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
                  if ((temPalavraLei || leiLink) && !isVeto) isAprovadoLei = true;
@@ -868,9 +880,17 @@ export default function App() {
                           <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t-[3px] border-black border-dashed">
                             {(() => {
                               if (isVeto && vetoLink) {
-                                  return <a href={vetoLink.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-2 border-black px-2 py-1 flex items-center gap-1 hover:bg-red-800 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">VETO (DIÁRIO OFICIAL)</a>;
+                                  if (vetoLink.url) {
+                                      return <a href={vetoLink.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-2 border-black px-2 py-1 flex items-center gap-1 hover:bg-red-800 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">VETO (DIÁRIO OFICIAL)</a>;
+                                  } else {
+                                      return <span className="text-[10px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-2 border-black px-2 py-1 flex items-center gap-1 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" title="Veto identificado, mas sem link publicado.">VETO REGISTRADO</span>;
+                                  }
                               } else if (isAprovadoLei && leiLink) {
-                                  return <a href={leiLink.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-2 border-black px-2 py-1 flex items-center gap-1 hover:bg-[#0097a7] transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</a>;
+                                  if (leiLink.url) {
+                                      return <a href={leiLink.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-2 border-black px-2 py-1 flex items-center gap-1 hover:bg-[#0097a7] transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</a>;
+                                  } else {
+                                      return <span className="text-[10px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-2 border-black px-2 py-1 flex items-center gap-1 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</span>;
+                                  }
                               }
                               return null;
                             })()}
@@ -885,6 +905,7 @@ export default function App() {
           </div>
         )}
 
+        {}
         {!loading && !error && viewMode === 'list' && (
           <div className="flex flex-col gap-4">
             
@@ -944,10 +965,9 @@ export default function App() {
 
               if (isProcesso) {
                  const temPalavraVeto = sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto');
-                 vetoLink = parsedLinks.find(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
+                 vetoLink = parsedLinks.find(l => l.label.toLowerCase().includes('veto'));
                  if (temPalavraVeto || vetoLink) isVeto = true;
 
-                 // AVALIA SE É LEI DE FORMA AMPLA
                  const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica') || ultMovLower.includes('transformado em lei') || ultMovLower.includes('redação final');
                  leiLink = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
                  if ((temPalavraLei || leiLink) && !isVeto) isAprovadoLei = true;
@@ -1062,9 +1082,17 @@ export default function App() {
                           <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t-[2px] border-black border-dashed">
                             {(() => {
                               if (isVeto && vetoLink) {
-                                  return <a href={vetoLink.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[8px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:bg-red-800">VETO (DIÁRIO OFICIAL)</a>;
+                                  if (vetoLink.url) {
+                                      return <a href={vetoLink.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[8px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:bg-red-800">VETO (DIÁRIO OFICIAL)</a>;
+                                  } else {
+                                      return <span className="text-[8px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">VETO REGISTRADO</span>;
+                                  }
                               } else if (isAprovadoLei && leiLink) {
-                                  return <a href={leiLink.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[8px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:bg-[#0097a7]">LEI APROVADA</a>;
+                                  if (leiLink.url) {
+                                      return <a href={leiLink.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[8px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:bg-[#0097a7]">LEI APROVADA</a>;
+                                  } else {
+                                      return <span className="text-[8px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">LEI APROVADA</span>;
+                                  }
                               }
                               return null;
                             })()}
@@ -1086,6 +1114,7 @@ export default function App() {
           </div>
         )}
 
+        {}
         {selectedItem && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setSelectedItem(null)}>
             <div className="bg-white border-[6px] border-black shadow-[12px_12px_0px_0px_rgba(255,219,88,1)] w-full max-w-4xl max-h-[90vh] flex flex-col relative" onClick={e => e.stopPropagation()}>
@@ -1144,7 +1173,6 @@ export default function App() {
                         const isProcessoModal = ['PL', 'PEC', 'PLC', 'PDL', 'PRC', 'MPV', 'VET', 'MSG', 'PSA'].includes(getNumero(selectedItem).split('/')[0].replace('.', ''));
                         const sitLower = (getSituacao(selectedItem) || '').toLowerCase();
                         const ultMovLower = (getUltimoMovimento(selectedItem) || '').toLowerCase();
-                        // AVALIA SE É LEI DE FORMA AMPLA TAMBÉM AQUI
                         const isAprovadoLeiModal = isProcessoModal && (sitLower.includes('lei') || sitLower.includes('norma jurídica') || ultMovLower.includes('transformado em lei') || ultMovLower.includes('redação final'));
                         if (isAprovadoLeiModal && getDataPublicacaoPreLei(selectedItem)) {
                            return (
@@ -1182,7 +1210,7 @@ export default function App() {
 
                       if (isProcessoModal) {
                          const temPalavraVeto = sitLowerModal.includes('veto') || ultMovLowerModal.includes('veto') || obsLowerModal.includes('veto');
-                         const temLinkVeto = parsedLinks.some(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
+                         const temLinkVeto = parsedLinks.some(l => l.label.toLowerCase().includes('veto'));
                          if (temPalavraVeto || temLinkVeto) isVetoModal = true;
 
                          const temPalavraLei = sitLowerModal.includes('lei') || sitLowerModal.includes('norma jurídica') || ultMovLowerModal.includes('transformado em lei') || ultMovLowerModal.includes('redação final');
@@ -1268,7 +1296,7 @@ export default function App() {
                       let isAprovadoLeiModal = false;
                       
                       const temPalavraVeto = sitLowerModal.includes('veto') || ultMovLowerModal.includes('veto') || obsLowerModal.includes('veto');
-                      let vetoLinkModal = parsedLinks.find(l => l.url.includes('doe.sea.sc.gov.br') || l.label.toLowerCase().includes('veto'));
+                      let vetoLinkModal = parsedLinks.find(l => l.label.toLowerCase().includes('veto'));
                       if (temPalavraVeto || vetoLinkModal) isVetoModal = true;
                       
                       const temPalavraLei = sitLowerModal.includes('lei') || sitLowerModal.includes('norma jurídica') || ultMovLowerModal.includes('transformado em lei') || ultMovLowerModal.includes('redação final');
@@ -1276,9 +1304,17 @@ export default function App() {
                       if ((temPalavraLei || leiLinkModal) && !isVetoModal) isAprovadoLeiModal = true;
 
                       if (isVetoModal && vetoLinkModal) {
-                          return <div className="pt-4 border-t-[3px] border-black border-dashed flex flex-wrap gap-3"><a href={vetoLinkModal.url} target="_blank" rel="noreferrer" className="text-xs font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[3px] border-black px-4 py-2 flex items-center gap-2 hover:bg-red-800 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform hover:-translate-y-1">VETO (DIÁRIO OFICIAL)</a></div>;
+                          if (vetoLinkModal.url) {
+                              return <div className="pt-4 border-t-[3px] border-black border-dashed flex flex-wrap gap-3"><a href={vetoLinkModal.url} target="_blank" rel="noreferrer" className="text-xs font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[3px] border-black px-4 py-2 flex items-center gap-2 hover:bg-red-800 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform hover:-translate-y-1">VETO (DIÁRIO OFICIAL)</a></div>;
+                          } else {
+                              return <div className="pt-4 border-t-[3px] border-black border-dashed flex flex-wrap gap-3"><span className="text-xs font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[3px] border-black px-4 py-2 flex items-center gap-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">VETO REGISTRADO</span></div>;
+                          }
                       } else if (isAprovadoLeiModal && leiLinkModal) {
-                          return <div className="pt-4 border-t-[3px] border-black border-dashed flex flex-wrap gap-3"><a href={leiLinkModal.url} target="_blank" rel="noreferrer" className="text-xs font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[3px] border-black px-4 py-2 flex items-center gap-2 hover:bg-[#0097a7] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform hover:-translate-y-1"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</a></div>;
+                          if (leiLinkModal.url) {
+                              return <div className="pt-4 border-t-[3px] border-black border-dashed flex flex-wrap gap-3"><a href={leiLinkModal.url} target="_blank" rel="noreferrer" className="text-xs font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[3px] border-black px-4 py-2 flex items-center gap-2 hover:bg-[#0097a7] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform hover:-translate-y-1"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</a></div>;
+                          } else {
+                              return <div className="pt-4 border-t-[3px] border-black border-dashed flex flex-wrap gap-3"><span className="text-xs font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[3px] border-black px-4 py-2 flex items-center gap-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</span></div>;
+                          }
                       }
                   }
                   return null;

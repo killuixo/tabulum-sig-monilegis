@@ -105,13 +105,28 @@ export default function App() {
       if (!API_URL || API_URL === "COLE_SUA_URL_DO_SCRIPT_AQUI") {
         throw new Error("A URL do Google Script não foi configurada.");
       }
-      const response = await fetch(API_URL);
-      if (!response.ok) throw new Error('Falha ao aceder aos dados da API.');
+      
+      const urlBypassCache = `${API_URL}${API_URL.includes('?') ? '&' : '?'}nocache=${new Date().getTime()}`;
+      
+      const response = await fetch(urlBypassCache, {
+         method: 'GET',
+         redirect: 'follow', 
+         headers: {
+             'Accept': 'application/json'
+         }
+      });
+
+      if (!response.ok) throw new Error(`Falha ao aceder aos dados da API (Erro HTTP: ${response.status}).`);
+      
       const jsonData = await response.json();
       setData(jsonData);
     } catch (err) {
-      console.error(err);
-      setError(err.message);
+      console.error("Erro no fetch:", err);
+      if (err.message === "Failed to fetch") {
+         setError("Erro de rede: O navegador do seu telemóvel bloqueou a ligação com o Google (CORS/Redirect) ou a cache falhou.");
+      } else {
+         setError(err.message);
+      }
     } finally {
       setLoading(false);
     }

@@ -1944,4 +1944,86 @@ export default function App() {
                           Distribuído em: {formatarData(selectedItem.dataDistribuicao)}
                         </p>
                       )}
-                      {selectedItem.infoRel
+                      {selectedItem.infoRelatoria && (
+                        <p className="text-xs font-bold text-[#008080] italic mt-1">
+                          Parecer / Info: {selectedItem.infoRelatoria}
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase text-slate-500">Processos Apensados / Anexos</p>
+                      <p className="text-xs font-bold text-slate-800">
+                        {selectedItem.processosAnexos || 'Nenhum processo anexo'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Editor de Observações Internas no Modal */}
+                <div className="p-4 rounded-xl border-2 border-slate-900 bg-slate-50">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs font-black uppercase tracking-wider text-slate-800">
+                      Anotações Internas da Articulação
+                    </span>
+                    {editingId !== selectedItem.numero && (
+                      <button
+                        onClick={() => {
+                          setEditingId(selectedItem.numero);
+                          setEditValue(selectedItem.observacoes || '');
+                        }}
+                        className="text-xs font-black uppercase underline text-[#008080]"
+                      >
+                        Editar Anotação
+                      </button>
+                    )}
+                  </div>
+
+                  {editingId === selectedItem.numero ? (
+                    <div className="space-y-3">
+                      <textarea
+                        rows="3"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        className="w-full p-3 text-sm font-bold border-2 border-slate-900 rounded-xl bg-white outline-none"
+                        placeholder="Insira observações estratégicas para a equipe..."
+                      />
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => setEditingId(null)}
+                          disabled={isSaving}
+                          className="px-4 py-2 rounded-lg border-2 border-slate-900 bg-white text-xs font-black uppercase"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          onClick={() => handleSaveObservacao(selectedItem.numero)}
+                          disabled={isSaving}
+                          className="px-4 py-2 rounded-lg border-2 border-slate-900 bg-[#008080] text-white text-xs font-black uppercase"
+                        >
+                          {isSaving ? 'Salvando...' : 'Salvar na Planilha'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm font-bold text-slate-700 whitespace-pre-wrap">
+                      {selectedItem.observacoes || (
+                        <span className="italic font-normal text-slate-400">Nenhuma anotação registrada.</span>
+                      )}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* Notificação Toast */}
+      {toastMsg && (
+        <div className="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl border-2 border-slate-900 bg-[#ffdb58] text-slate-900 shadow-[4px_4px_0px_0px_#0f172a] font-black text-xs uppercase tracking-wider">
+          {toastMsg}
+        </div>
+      )}
+    </div>
+  );
+}

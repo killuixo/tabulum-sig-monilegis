@@ -28,18 +28,21 @@ export default function App() {
   const [showFilters, setShowFilters] = useState(false);
   const [filterSearch, setFilterSearch] = useState('');
   const [onlyOpenVista, setOnlyOpenVista] = useState(false);
+  const [onlyDiligencia, setOnlyDiligencia] = useState(false);
+  const [onlyOpenDiligencia, setOnlyOpenDiligencia] = useState(false);
   const [toggleUtilidade, setToggleUtilidade] = useState(false);
 
   // Estado de Multiseleção Universal
   const [filters, setFilters] = useState({
-    status: [],        // 'Em Tramitação', 'Aprovado', 'Virou Lei', 'Com Vista', 'Vetado', 'Encerrado', etc.
-    tipo: [],          // PL, PLC, PEC, REQ, MOC, IND...
-    situacao: [],      // Situação oficial da ALESC
-    setor: [],         // Comissão ou Setor Atual
-    relator: [],       // Relator(a) atual
-    vistaDeputado: [], // Parlamentar que pediu vista
-    autoria: [],       // Autor ou subscritor
-    ano: [],           // Ano da proposição
+    status: [],          // 'Em Tramitação', 'Aprovado', 'Virou Lei', 'Com Pedido de Vista', 'Com Diligência', etc.
+    vistaDeputado: [],   // Parlamentar que pediu vista
+    diligenciaOrigem: [],// Relator(a) ou Setor do Requerimento de Diligência
+    tipo: [],            // PL, PLC, PEC, REQ, RQD, MOC, IND...
+    situacao: [],        // Situação oficial da ALESC
+    setor: [],           // Comissão ou Setor Atual
+    relator: [],         // Relator(a) atual
+    autoria: [],         // Autor ou subscritor
+    ano: [],             // Ano da proposição
   });
 
   const [editingId, setEditingId] = useState(null);
@@ -157,6 +160,9 @@ export default function App() {
         let infoRelatoria = String(raw['Informação da Relatoria'] || raw['Informacao da relatoria'] || raw['Informacao da Relatoria'] || raw['informacao_relatoria'] || '').trim();
         if (infoRelatoria === '-') infoRelatoria = '';
 
+        let colDiligencia = String(raw['Requerimento de Diligência'] || raw['Requerimento de Diligencia'] || raw['Diligência'] || raw['Diligencia'] || '').trim();
+        if (colDiligencia === '-') colDiligencia = '';
+
         const dataRedacaoFinal = String(raw['Data da Publicação da Redação Final'] || raw['Data Publicação Pré-Lei'] || '').trim();
 
         // Extrai lista de autores/subscritores
@@ -174,7 +180,6 @@ export default function App() {
             if (!lowerParte.includes('devolvido')) {
               temVistaEmAberto = true;
             }
-            // Limpa parênteses de datas para obter o nome limpo do parlamentar no filtro
             const nomeLimpo = parte
               .replace(/\(.*?\)/g, '')
               .replace(/^vista\s+de\s+/i, '')
@@ -196,6 +201,9 @@ export default function App() {
         const sitLower = situacao.toLowerCase();
         const ultMovLower = ultimoMovimento.toLowerCase();
         const obsLower = observacoes.toLowerCase();
+        const infoRelLower = infoRelatoria.toLowerCase();
+        const ementaLower = ementa.toLowerCase();
+        const tipoLower = tipo.toLowerCase();
 
         // Extração de Número da Lei
         let numeroLei = '';
@@ -264,6 +272,64 @@ export default function App() {
             sitLower.includes('prejudicad') ||
             sitLower.includes('encerrad'));
 
+        // =================================================================
+        // DETECÇÃO DE REQUERIMENTO DE DILIGÊNCIA E STATUS DA DILIGÊNCIA
+        // =================================================================
+        const regexDiligencia = /dilig[êe]ncia/i;
+        const temDiligencia =
+          Boolean(colDiligencia) ||
+          prefix === 'RQD' ||
+          regexDiligencia.test(situacao) ||
+          regexDiligencia.test(ultimoMovimento) ||
+          regexDiligencia.test(infoRelatoria) ||
+          regexDiligencia.test(observacoes) ||
+          regexDiligencia.test(tipoLower) ||
+          (!isProcesso && regexDiligencia.test(ementaLower));
+
+        let detalheDiligencia = '';
+        if (temDiligencia) {
+          if (colDiligencia) {
+            detalheDiligencia = colDiligencia;
+          } else if (regexDiligencia.test(infoRelatoria)) {
+            detalheDiligencia = infoRelatoria;
+          } else if (regexDiligencia.test(ultimoMovimento)) {
+            detalheDiligencia = formatarUltimoMovimento(ultimoMovimento);
+          } else if (regexDiligencia.test(situacao)) {
+            detalheDiligencia = situacao;
+          } else if (regexDiligencia.test(observacoes)) {
+            detalheDiligencia = observacoes;
+          } else {
+            detalheDiligencia = 'Requerimento de Diligência registrado';
+          }
+        }
+
+        const diligenciaConcluida =
+          ultMovLower.includes('diligência cumprida') ||
+          ultMovLower.includes('diligência respondida') ||
+          ultMovLower.includes('diligência encerrada') ||
+          ultMovLower.includes('resposta de diligência') ||
+          infoRelLower.includes('diligência cumprida') ||
+          infoRelLower.includes('diligência respondida');
+
+        const temDiligenciaEmAberto =
+          temDiligencia &&
+          !isVirouLei &&
+          !isVeto &&
+          !isEncerrado &&
+          (!diligenciaConcluida || sitLower.includes('diligência') || sitLower.includes('aguardando'));
+
+        // Identifica o responsável/setor associado à diligência para os botões de filtro
+        let diligenciaResponsavel = '';
+        if (temDiligencia) {
+          if (relator && relator !== '-') {
+            diligenciaResponsavel = `Rel. ${relator}`;
+          } else if (setor && setor !== '-') {
+            diligenciaResponsavel = setor;
+          } else {
+            diligenciaResponsavel = 'Diligência Geral';
+          }
+        }
+
         // Classificação principal de fase para articuladores
         let fasePrincipal = 'Em Tramitação';
         if (isProcesso) {
@@ -286,10 +352,11 @@ export default function App() {
 
         const isTramitando = fasePrincipal === 'Em Tramitação' || fasePrincipal === 'Aguardando Resposta';
 
-        // Tags de status que permitem filtro múltiplo cruzado (ex.: Em Tramitação + Com Vista)
+        // Tags de status que permitem filtro múltiplo cruzado
         const statusTags = [fasePrincipal];
         if (isAprovado && !statusTags.includes('Aprovado')) statusTags.push('Aprovado');
         if (pedidoVista) statusTags.push('Com Pedido de Vista');
+        if (temDiligencia) statusTags.push('Com Diligência');
 
         const matchNum = numero.match(/(\d+)\/(\d+)/);
         const sortNumeroVal = matchNum ? parseInt(matchNum[2], 10) * 100000 + parseInt(matchNum[1], 10) : 0;
@@ -319,6 +386,10 @@ export default function App() {
           pedidoVista,
           vistaDeputados,
           temVistaEmAberto,
+          temDiligencia,
+          temDiligenciaEmAberto,
+          detalheDiligencia,
+          diligenciaResponsavel,
           infoRelatoria,
           dataRedacaoFinal,
           parsedLinks,
@@ -343,12 +414,11 @@ export default function App() {
   // =====================================================================
   // 2. FILTRAGEM UNIVERSAL E ESTATÍSTICAS DO DASHBOARD
   // =====================================================================
-  const { tabData, filteredData, stats, filterOptions, vistaBreakdown, pieData } = useMemo(() => {
+  const { tabData, filteredData, stats, filterOptions, vistaBreakdown, diligenciaBreakdown, pieData } = useMemo(() => {
     const tabItems = enrichedData.filter((item) =>
       activeTab === 'processo' ? item.isProcesso : !item.isProcesso
     );
 
-    // Coleta de opções e contadores para os Filtros Universais de Multiseleção
     const countMap = {
       status: {},
       tipo: {},
@@ -356,6 +426,7 @@ export default function App() {
       setor: {},
       relator: {},
       vistaDeputado: {},
+      diligenciaOrigem: {},
       autoria: {},
       ano: {},
     };
@@ -372,6 +443,9 @@ export default function App() {
       inc('setor', item.setor);
       if (item.relator) inc('relator', item.relator);
       item.vistaDeputados.forEach((dep) => inc('vistaDeputado', dep));
+      if (item.temDiligencia && item.diligenciaResponsavel) {
+        inc('diligenciaOrigem', item.diligenciaResponsavel);
+      }
       item.autoresList.forEach((aut) => inc('autoria', aut));
       inc('ano', item.ano);
     });
@@ -380,6 +454,8 @@ export default function App() {
     const filtered = tabItems.filter((item) => {
       if (toggleUtilidade && !item.ementa.toLowerCase().includes('utilidade pública')) return false;
       if (onlyOpenVista && (!item.pedidoVista || !item.temVistaEmAberto)) return false;
+      if (onlyDiligencia && !item.temDiligencia) return false;
+      if (onlyOpenDiligencia && !item.temDiligenciaEmAberto) return false;
 
       if (filters.status.length > 0) {
         const matchStatus = filters.status.some((st) => item.statusTags.includes(st));
@@ -397,6 +473,12 @@ export default function App() {
         if (!matchVista) return false;
       }
 
+      if (filters.diligenciaOrigem.length > 0) {
+        if (!item.temDiligencia || !filters.diligenciaOrigem.includes(item.diligenciaResponsavel)) {
+          return false;
+        }
+      }
+
       if (filters.autoria.length > 0) {
         const matchAutor = filters.autoria.some((aut) => item.autoresList.includes(aut));
         if (!matchAutor) return false;
@@ -411,6 +493,7 @@ export default function App() {
           item.setor,
           item.relator,
           item.pedidoVista,
+          item.detalheDiligencia,
           item.autoria,
           item.ultimoMovimento,
           item.observacoes,
@@ -436,6 +519,8 @@ export default function App() {
       apenasAprovadoPlenario: 0,
       comVista: 0,
       comVistaAberta: 0,
+      comDiligencia: 0,
+      comDiligenciaAberta: 0,
       vetados: 0,
       encerrados: 0,
       aguardando: 0,
@@ -445,12 +530,14 @@ export default function App() {
     };
 
     const vistaCounter = {};
+    const diligenciaCounter = {};
 
     filtered.forEach((item) => {
       if (item.fasePrincipal === 'Em Tramitação') dashboard.tramitando++;
       if (item.isAprovado) dashboard.aprovadosTotal++;
       if (item.isVirouLei) dashboard.virouLei++;
       if (item.isAprovado && !item.isVirouLei) dashboard.apenasAprovadoPlenario++;
+
       if (item.pedidoVista) {
         dashboard.comVista++;
         if (item.temVistaEmAberto) dashboard.comVistaAberta++;
@@ -458,6 +545,15 @@ export default function App() {
           vistaCounter[dep] = (vistaCounter[dep] || 0) + 1;
         });
       }
+
+      if (item.temDiligencia) {
+        dashboard.comDiligencia++;
+        if (item.temDiligenciaEmAberto) dashboard.comDiligenciaAberta++;
+        if (item.diligenciaResponsavel) {
+          diligenciaCounter[item.diligenciaResponsavel] = (diligenciaCounter[item.diligenciaResponsavel] || 0) + 1;
+        }
+      }
+
       if (item.isVeto) dashboard.vetados++;
       if (item.isEncerrado) dashboard.encerrados++;
 
@@ -489,9 +585,11 @@ export default function App() {
       stats: dashboard,
       pieData: generatedPie,
       vistaBreakdown: Object.entries(vistaCounter).sort((a, b) => b[1] - a[1]),
+      diligenciaBreakdown: Object.entries(diligenciaCounter).sort((a, b) => b[1] - a[1]),
       filterOptions: {
         status: formatOpts(countMap.status),
         vistaDeputado: formatOpts(countMap.vistaDeputado),
+        diligenciaOrigem: formatOpts(countMap.diligenciaOrigem),
         tipo: formatOpts(countMap.tipo),
         situacao: formatOpts(countMap.situacao),
         setor: formatOpts(countMap.setor),
@@ -502,7 +600,7 @@ export default function App() {
           .map(([label, count]) => ({ label, count })),
       },
     };
-  }, [enrichedData, activeTab, filters, searchTerm, toggleUtilidade, onlyOpenVista]);
+  }, [enrichedData, activeTab, filters, searchTerm, toggleUtilidade, onlyOpenVista, onlyDiligencia, onlyOpenDiligencia]);
 
   // Ordenação
   const sortedFilteredData = useMemo(() => {
@@ -555,15 +653,18 @@ export default function App() {
   const limparTodosFiltros = () => {
     setFilters({
       status: [],
+      vistaDeputado: [],
+      diligenciaOrigem: [],
       tipo: [],
       situacao: [],
       setor: [],
       relator: [],
-      vistaDeputado: [],
       autoria: [],
       ano: [],
     });
     setOnlyOpenVista(false);
+    setOnlyDiligencia(false);
+    setOnlyOpenDiligencia(false);
     setToggleUtilidade(false);
     setSearchTerm('');
   };
@@ -572,9 +673,11 @@ export default function App() {
     return (
       Object.values(filters).reduce((acc, arr) => acc + arr.length, 0) +
       (onlyOpenVista ? 1 : 0) +
+      (onlyDiligencia ? 1 : 0) +
+      (onlyOpenDiligencia ? 1 : 0) +
       (toggleUtilidade ? 1 : 0)
     );
-  }, [filters, onlyOpenVista, toggleUtilidade]);
+  }, [filters, onlyOpenVista, onlyDiligencia, onlyOpenDiligencia, toggleUtilidade]);
 
   // Gravação de Observações no Google Apps Script
   const handleSaveObservacao = async (numero) => {
@@ -624,6 +727,7 @@ export default function App() {
       'SETOR ATUAL',
       'RELATOR(A)',
       'PEDIDO DE VISTA (COM QUEM)',
+      'REQUERIMENTO DE DILIGÊNCIA',
       'AUTORIA / SUBSCRIÇÃO',
       'EMENTA',
       'NÚMERO DA LEI APROVADA',
@@ -646,6 +750,7 @@ export default function App() {
       escapeCSV(item.setor),
       escapeCSV(item.relator),
       escapeCSV(item.pedidoVista),
+      escapeCSV(item.detalheDiligencia),
       escapeCSV(item.autoria),
       escapeCSV(item.ementa),
       escapeCSV(item.numeroLei),
@@ -682,6 +787,14 @@ export default function App() {
         badgeBg: 'bg-[#c41e3a] text-white',
         boxBg: 'bg-[#c41e3a]/10 border-[#c41e3a] text-[#8b1328]',
         label: item.temVistaEmAberto ? 'PEDIDO DE VISTA EM ABERTO' : 'HISTÓRICO DE VISTA',
+      };
+    }
+    if (item.temDiligenciaEmAberto) {
+      return {
+        accentBar: 'bg-[#ffdb58]',
+        badgeBg: 'bg-[#ffdb58] text-slate-900',
+        boxBg: 'bg-[#ffdb58]/35 border-[#b48a00] text-slate-900',
+        label: 'EM DILIGÊNCIA',
       };
     }
     if (item.isVirouLei) {
@@ -760,20 +873,30 @@ export default function App() {
               </div>
             </div>
 
-            <button
-              onClick={fetchData}
-              disabled={loading}
-              className="self-end sm:self-center px-3.5 py-2 rounded-lg border-2 border-slate-900 bg-white hover:bg-[#ffdb58]/40 text-xs font-extrabold uppercase tracking-wider flex items-center gap-2 shadow-[2px_2px_0px_0px_#0f172a] active:translate-y-0.5 transition-all"
-              title="Recarregar dados da planilha"
-            >
-              <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                <path d="M3 3v5h5" />
-                <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
-                <path d="M16 16h5v5" />
-              </svg>
-              Atualizar
-            </button>
+            <div className="flex items-center gap-2 self-end sm:self-center">
+              <button
+                onClick={() => setToggleUtilidade(!toggleUtilidade)}
+                className={`px-3 py-2 rounded-lg border-2 border-slate-900 text-xs font-extrabold uppercase tracking-wider shadow-[2px_2px_0px_0px_#0f172a] transition-all ${
+                  toggleUtilidade ? 'bg-[#ffdb58] text-slate-900' : 'bg-white text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                {toggleUtilidade ? '✓ Utilidade Pública' : 'Utilidade Pública'}
+              </button>
+              <button
+                onClick={fetchData}
+                disabled={loading}
+                className="px-3.5 py-2 rounded-lg border-2 border-slate-900 bg-white hover:bg-[#ffdb58]/40 text-xs font-extrabold uppercase tracking-wider flex items-center gap-2 shadow-[2px_2px_0px_0px_#0f172a] active:translate-y-0.5 transition-all"
+                title="Recarregar dados da planilha"
+              >
+                <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                  <path d="M3 3v5h5" />
+                  <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+                  <path d="M16 16h5v5" />
+                </svg>
+                Atualizar
+              </button>
+            </div>
           </div>
 
           {/* Seletor de Abas: Processo Legislativo vs Atividade Parlamentar */}
@@ -838,131 +961,157 @@ export default function App() {
             PAINEL DE RESPOSTAS RÁPIDAS (KPIs CLICÁVEIS MULTI-SELEÇÃO)
            =============================================================== */}
         {activeTab === 'processo' ? (
-          <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <section className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
             {/* Card 1: Total / Todos */}
             <div
               onClick={limparTodosFiltros}
-              className={`p-4 rounded-xl border-2 border-slate-900 cursor-pointer transition-all shadow-[3px_3px_0px_0px_#0f172a] hover:-translate-y-0.5 ${
+              className={`p-3.5 rounded-xl border-2 border-slate-900 cursor-pointer transition-all shadow-[3px_3px_0px_0px_#0f172a] hover:-translate-y-0.5 ${
                 totalActiveFilters === 0 ? 'bg-slate-900 text-white' : 'bg-white text-slate-900 hover:bg-slate-50'
               }`}
             >
               <div className="flex justify-between items-center">
-                <span className="text-[11px] font-extrabold uppercase tracking-wider opacity-80">Exibindo</span>
+                <span className="text-[10px] font-extrabold uppercase tracking-wider opacity-80">Exibindo</span>
                 <span className="w-2.5 h-2.5 rounded-full bg-[#ffdb58]"></span>
               </div>
-              <p className="text-3xl font-black mt-1">{stats.total}</p>
-              <p className="text-[11px] font-bold opacity-75 mt-0.5">de {tabData.length} processos</p>
+              <p className="text-2xl sm:text-3xl font-black mt-1">{stats.total}</p>
+              <p className="text-[10px] font-bold opacity-75 mt-0.5">de {tabData.length} processos</p>
             </div>
 
             {/* Card 2: Em Tramitação */}
             <div
               onClick={() => toggleFilterValue('status', 'Em Tramitação')}
-              className={`p-4 rounded-xl border-2 border-slate-900 cursor-pointer transition-all shadow-[3px_3px_0px_0px_#0f172a] hover:-translate-y-0.5 ${
+              className={`p-3.5 rounded-xl border-2 border-slate-900 cursor-pointer transition-all shadow-[3px_3px_0px_0px_#0f172a] hover:-translate-y-0.5 ${
                 filters.status.includes('Em Tramitação')
                   ? 'bg-[#ffdb58] text-slate-900 ring-2 ring-slate-900 ring-offset-2'
                   : 'bg-white hover:bg-[#ffdb58]/25'
               }`}
             >
               <div className="flex justify-between items-center">
-                <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700">Tramitando</span>
-                <span className="w-3 h-3 rounded-sm bg-[#ffdb58] border border-slate-900"></span>
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-700">Tramitando</span>
+                <span className="w-2.5 h-2.5 rounded-sm bg-[#ffdb58] border border-slate-900"></span>
               </div>
-              <p className="text-3xl font-black mt-1 text-slate-900">{stats.tramitando}</p>
-              <p className="text-[11px] font-bold text-slate-600 mt-0.5">Em curso nas comissões</p>
+              <p className="text-2xl sm:text-3xl font-black mt-1 text-slate-900">{stats.tramitando}</p>
+              <p className="text-[10px] font-bold text-slate-600 mt-0.5">Nas comissões</p>
             </div>
 
             {/* Card 3: Com Pedido de Vista */}
             <div
               onClick={() => toggleFilterValue('status', 'Com Pedido de Vista')}
-              className={`p-4 rounded-xl border-2 border-slate-900 cursor-pointer transition-all shadow-[3px_3px_0px_0px_#0f172a] hover:-translate-y-0.5 ${
+              className={`p-3.5 rounded-xl border-2 border-slate-900 cursor-pointer transition-all shadow-[3px_3px_0px_0px_#0f172a] hover:-translate-y-0.5 ${
                 filters.status.includes('Com Pedido de Vista')
                   ? 'bg-[#c41e3a] text-white ring-2 ring-slate-900 ring-offset-2'
                   : 'bg-white hover:bg-[#c41e3a]/10'
               }`}
             >
               <div className="flex justify-between items-center">
-                <span className={`text-[11px] font-extrabold uppercase tracking-wider ${filters.status.includes('Com Pedido de Vista') ? 'text-white' : 'text-[#c41e3a]'}`}>
+                <span className={`text-[10px] font-extrabold uppercase tracking-wider ${filters.status.includes('Com Pedido de Vista') ? 'text-white' : 'text-[#c41e3a]'}`}>
                   Pedidos de Vista
                 </span>
-                <span className="w-3 h-3 rounded-sm bg-[#c41e3a] border border-slate-900"></span>
+                <span className="w-2.5 h-2.5 rounded-sm bg-[#c41e3a] border border-slate-900"></span>
               </div>
-              <p className="text-3xl font-black mt-1">{stats.comVista}</p>
-              <p className={`text-[11px] font-bold mt-0.5 ${filters.status.includes('Com Pedido de Vista') ? 'text-white/90' : 'text-slate-600'}`}>
-                {stats.comVistaAberta} em aberto agora
+              <p className="text-2xl sm:text-3xl font-black mt-1">{stats.comVista}</p>
+              <p className={`text-[10px] font-bold mt-0.5 ${filters.status.includes('Com Pedido de Vista') ? 'text-white/90' : 'text-slate-600'}`}>
+                {stats.comVistaAberta} em aberto
               </p>
             </div>
 
-            {/* Card 4: Aprovados (Geral / Redação Final) */}
+            {/* Card 4: Requerimentos de Diligência (NOVO) */}
+            <div
+              onClick={() => {
+                setOnlyDiligencia(!onlyDiligencia);
+                if (onlyOpenDiligencia) setOnlyOpenDiligencia(false);
+              }}
+              className={`p-3.5 rounded-xl border-2 border-slate-900 cursor-pointer transition-all shadow-[3px_3px_0px_0px_#0f172a] hover:-translate-y-0.5 ${
+                onlyDiligencia || onlyOpenDiligencia || filters.status.includes('Com Diligência')
+                  ? 'bg-[#ffdb58] text-slate-900 ring-2 ring-slate-900 ring-offset-2'
+                  : 'bg-white hover:bg-[#ffdb58]/30'
+              }`}
+            >
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-900">
+                  Diligências
+                </span>
+                <span className="px-1 py-0.2 text-[8px] font-black uppercase bg-slate-900 text-[#ffdb58] rounded">
+                  REQ
+                </span>
+              </div>
+              <p className="text-2xl sm:text-3xl font-black mt-1 text-slate-900">{stats.comDiligencia}</p>
+              <p className="text-[10px] font-bold text-slate-700 mt-0.5">
+                {stats.comDiligenciaAberta} em aberto
+              </p>
+            </div>
+
+            {/* Card 5: Aprovados (Geral / Redação Final) */}
             <div
               onClick={() => toggleFilterValue('status', 'Aprovado')}
-              className={`p-4 rounded-xl border-2 border-slate-900 cursor-pointer transition-all shadow-[3px_3px_0px_0px_#0f172a] hover:-translate-y-0.5 ${
+              className={`p-3.5 rounded-xl border-2 border-slate-900 cursor-pointer transition-all shadow-[3px_3px_0px_0px_#0f172a] hover:-translate-y-0.5 ${
                 filters.status.includes('Aprovado')
                   ? 'bg-[#008080] text-white ring-2 ring-slate-900 ring-offset-2'
                   : 'bg-white hover:bg-[#008080]/10'
               }`}
             >
               <div className="flex justify-between items-center">
-                <span className={`text-[11px] font-extrabold uppercase tracking-wider ${filters.status.includes('Aprovado') ? 'text-white' : 'text-[#008080]'}`}>
+                <span className={`text-[10px] font-extrabold uppercase tracking-wider ${filters.status.includes('Aprovado') ? 'text-white' : 'text-[#008080]'}`}>
                   Aprovados
                 </span>
-                <span className="w-3 h-3 rounded-sm bg-[#008080] border border-slate-900"></span>
+                <span className="w-2.5 h-2.5 rounded-sm bg-[#008080] border border-slate-900"></span>
               </div>
-              <p className="text-3xl font-black mt-1">{stats.aprovadosTotal}</p>
-              <p className={`text-[11px] font-bold mt-0.5 ${filters.status.includes('Aprovado') ? 'text-white/90' : 'text-slate-600'}`}>
+              <p className="text-2xl sm:text-3xl font-black mt-1">{stats.aprovadosTotal}</p>
+              <p className={`text-[10px] font-bold mt-0.5 ${filters.status.includes('Aprovado') ? 'text-white/90' : 'text-slate-600'}`}>
                 Plenário + Leis
               </p>
             </div>
 
-            {/* Card 5: Viraram Lei */}
+            {/* Card 6: Viraram Lei */}
             <div
               onClick={() => toggleFilterValue('status', 'Virou Lei')}
-              className={`p-4 rounded-xl border-2 border-slate-900 cursor-pointer transition-all shadow-[3px_3px_0px_0px_#0f172a] hover:-translate-y-0.5 ${
+              className={`p-3.5 rounded-xl border-2 border-slate-900 cursor-pointer transition-all shadow-[3px_3px_0px_0px_#0f172a] hover:-translate-y-0.5 ${
                 filters.status.includes('Virou Lei')
                   ? 'bg-[#008080] text-[#ffdb58] ring-2 ring-slate-900 ring-offset-2'
                   : 'bg-white hover:bg-[#008080]/15'
               }`}
             >
               <div className="flex justify-between items-center">
-                <span className={`text-[11px] font-extrabold uppercase tracking-wider ${filters.status.includes('Virou Lei') ? 'text-[#ffdb58]' : 'text-[#008080]'}`}>
+                <span className={`text-[10px] font-extrabold uppercase tracking-wider ${filters.status.includes('Virou Lei') ? 'text-[#ffdb58]' : 'text-[#008080]'}`}>
                   Viraram Lei
                 </span>
                 <span className="px-1.5 py-0.2 text-[9px] font-black uppercase bg-[#ffdb58] text-slate-900 border border-slate-900 rounded">
                   LEI
                 </span>
               </div>
-              <p className="text-3xl font-black mt-1">{stats.virouLei}</p>
-              <p className={`text-[11px] font-bold mt-0.5 ${filters.status.includes('Virou Lei') ? 'text-white' : 'text-slate-600'}`}>
-                Sancionadas / Promulgadas
+              <p className="text-2xl sm:text-3xl font-black mt-1">{stats.virouLei}</p>
+              <p className={`text-[10px] font-bold mt-0.5 ${filters.status.includes('Virou Lei') ? 'text-white' : 'text-slate-600'}`}>
+                Sancionadas
               </p>
             </div>
 
-            {/* Card 6: Vetados / Encerrados */}
+            {/* Card 7: Vetados / Encerrados */}
             <div
               onClick={() => toggleFilterValue('status', 'Vetado')}
-              className={`p-4 rounded-xl border-2 border-slate-900 cursor-pointer transition-all shadow-[3px_3px_0px_0px_#0f172a] hover:-translate-y-0.5 ${
+              className={`p-3.5 rounded-xl border-2 border-slate-900 cursor-pointer transition-all shadow-[3px_3px_0px_0px_#0f172a] hover:-translate-y-0.5 ${
                 filters.status.includes('Vetado')
                   ? 'bg-[#c41e3a] text-white ring-2 ring-slate-900 ring-offset-2'
                   : 'bg-white hover:bg-slate-100'
               }`}
             >
               <div className="flex justify-between items-center">
-                <span className="text-[11px] font-extrabold uppercase tracking-wider">Vetados</span>
-                <span className="text-[10px] font-bold opacity-75">Arq: {stats.encerrados}</span>
+                <span className="text-[10px] font-extrabold uppercase tracking-wider">Vetados</span>
+                <span className="text-[9px] font-bold opacity-75">Arq: {stats.encerrados}</span>
               </div>
-              <p className="text-3xl font-black mt-1">{stats.vetados}</p>
+              <p className="text-2xl sm:text-3xl font-black mt-1">{stats.vetados}</p>
               <p
                 onClick={(e) => {
                   e.stopPropagation();
                   toggleFilterValue('status', 'Encerrado');
                 }}
-                className="text-[11px] font-extrabold underline mt-0.5 hover:text-[#c41e3a]"
+                className="text-[10px] font-extrabold underline mt-0.5 hover:text-[#c41e3a]"
               >
-                Filtrar Encerrados ({stats.encerrados})
+                Encerrados ({stats.encerrados})
               </p>
             </div>
           </section>
         ) : (
-          <section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <section className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             <div
               onClick={limparTodosFiltros}
               className={`p-4 rounded-xl border-2 border-slate-900 cursor-pointer transition-all shadow-[3px_3px_0px_0px_#0f172a] ${
@@ -973,12 +1122,21 @@ export default function App() {
               <p className="text-3xl font-black mt-1">{stats.total}</p>
             </div>
             <div
+              onClick={() => setOnlyDiligencia(!onlyDiligencia)}
+              className={`p-4 rounded-xl border-2 border-slate-900 cursor-pointer transition-all shadow-[3px_3px_0px_0px_#0f172a] ${
+                onlyDiligencia ? 'bg-[#ffdb58] text-slate-900' : 'bg-white hover:bg-[#ffdb58]/25'
+              }`}
+            >
+              <span className="text-[11px] font-extrabold uppercase tracking-wider">Com Diligência</span>
+              <p className="text-3xl font-black mt-1">{stats.comDiligencia}</p>
+            </div>
+            <div
               onClick={() => toggleFilterValue('status', 'Aguardando Resposta')}
               className={`p-4 rounded-xl border-2 border-slate-900 cursor-pointer transition-all shadow-[3px_3px_0px_0px_#0f172a] ${
                 filters.status.includes('Aguardando Resposta') ? 'bg-[#ffdb58] text-slate-900' : 'bg-white hover:bg-[#ffdb58]/20'
               }`}
             >
-              <span className="text-[11px] font-extrabold uppercase tracking-wider">Aguardando / Diligência</span>
+              <span className="text-[11px] font-extrabold uppercase tracking-wider">Aguardando Resposta</span>
               <p className="text-3xl font-black mt-1">{stats.aguardando}</p>
             </div>
             <div
@@ -987,7 +1145,7 @@ export default function App() {
                 filters.status.includes('Encaminhado / Aprovado') ? 'bg-[#008080] text-white' : 'bg-white hover:bg-[#008080]/15'
               }`}
             >
-              <span className="text-[11px] font-extrabold uppercase tracking-wider">Encaminhados / Expedidos</span>
+              <span className="text-[11px] font-extrabold uppercase tracking-wider">Encaminhados</span>
               <p className="text-3xl font-black mt-1">{stats.encaminhados}</p>
             </div>
             <div
@@ -996,86 +1154,163 @@ export default function App() {
                 filters.status.includes('Arquivado') ? 'bg-slate-700 text-white' : 'bg-white hover:bg-slate-100'
               }`}
             >
-              <span className="text-[11px] font-extrabold uppercase tracking-wider">Arquivados / Concluídos</span>
+              <span className="text-[11px] font-extrabold uppercase tracking-wider">Arquivados</span>
               <p className="text-3xl font-black mt-1">{stats.arquivados}</p>
             </div>
           </section>
         )}
 
         {/* ===============================================================
-            DESTAQUE DE PEDIDOS DE VISTA ("COM QUEM ESTÁ?") + VISÃO POR TIPO
+            CAIXAS LADO A LADO:
+            1. PEDIDOS DE VISTA ("COM QUEM ESTÁ?")
+            2. REQUERIMENTOS DE DILIGÊNCIA (NOVO!)
+            3. TIPOS DE PROPOSIÇÃO
            =============================================================== */}
         <section className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-          {/* Painel Rápido: Pedidos de Vista e Com Quem Está */}
-          <div className="lg:col-span-7 bg-white border-2 border-slate-900 rounded-xl p-4 shadow-[3px_3px_0px_0px_#0f172a] flex flex-col justify-between">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3 mb-3">
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-sm bg-[#c41e3a] border border-slate-900"></span>
-                <h3 className="font-black text-xs sm:text-sm uppercase tracking-wider text-slate-900">
-                  Pedidos de Vista — Com quem está?
-                </h3>
+          {/* CAIXA 1: Pedidos de Vista — Com quem está? */}
+          <div className="lg:col-span-4 bg-white border-2 border-slate-900 rounded-xl p-4 shadow-[3px_3px_0px_0px_#0f172a] flex flex-col justify-between">
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2.5 mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-sm bg-[#c41e3a] border border-slate-900"></span>
+                  <h3 className="font-black text-xs sm:text-sm uppercase tracking-wider text-slate-900">
+                    Pedidos de Vista
+                  </h3>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => toggleFilterValue('status', 'Com Pedido de Vista')}
+                    className={`px-2 py-1 rounded-md border text-[10px] font-extrabold uppercase transition-colors ${
+                      filters.status.includes('Com Pedido de Vista')
+                        ? 'bg-slate-900 text-white border-slate-900'
+                        : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
+                    }`}
+                  >
+                    Todos ({stats.comVista})
+                  </button>
+                  <button
+                    onClick={() => setOnlyOpenVista(!onlyOpenVista)}
+                    className={`px-2 py-1 rounded-md border text-[10px] font-extrabold uppercase transition-colors ${
+                      onlyOpenVista
+                        ? 'bg-[#c41e3a] text-white border-slate-900'
+                        : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
+                    }`}
+                  >
+                    {onlyOpenVista ? '✓ Em Aberto' : `Em Aberto (${stats.comVistaAberta})`}
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setOnlyOpenVista(!onlyOpenVista)}
-                  className={`px-2.5 py-1 rounded-md border text-[11px] font-extrabold uppercase transition-colors ${
-                    onlyOpenVista
-                      ? 'bg-[#c41e3a] text-white border-slate-900'
-                      : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
-                  }`}
-                >
-                  {onlyOpenVista ? '✓ Apenas Vista em Aberto' : 'Filtrar Vista em Aberto'}
-                </button>
-                <button
-                  onClick={() => setToggleUtilidade(!toggleUtilidade)}
-                  className={`px-2.5 py-1 rounded-md border text-[11px] font-extrabold uppercase transition-colors ${
-                    toggleUtilidade
-                      ? 'bg-[#ffdb58] text-slate-900 border-slate-900'
-                      : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
-                  }`}
-                >
-                  {toggleUtilidade ? '✓ Utilidade Pública' : 'Utilidade Pública'}
-                </button>
-              </div>
-            </div>
 
-            {vistaBreakdown.length > 0 ? (
-              <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto pr-1">
-                {vistaBreakdown.map(([deputado, qtd]) => {
-                  const active = filters.vistaDeputado.includes(deputado);
-                  return (
-                    <button
-                      key={deputado}
-                      onClick={() => toggleFilterValue('vistaDeputado', deputado)}
-                      className={`px-3 py-1.5 rounded-lg border-2 text-xs font-extrabold flex items-center gap-2 transition-all ${
-                        active
-                          ? 'bg-[#c41e3a] text-white border-slate-900 shadow-[2px_2px_0px_0px_#0f172a]'
-                          : 'bg-[#f5f4ef] text-slate-800 border-slate-300 hover:border-slate-900'
-                      }`}
-                    >
-                      <span className="truncate max-w-[180px]">{deputado}</span>
-                      <span className={`px-1.5 py-0.2 rounded text-[10px] font-black ${
-                        active ? 'bg-white text-[#c41e3a]' : 'bg-[#c41e3a]/15 text-[#c41e3a]'
-                      }`}>
-                        {qtd}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="text-xs font-bold text-slate-400 italic py-2">
-                Nenhum pedido de vista registrado nas proposições exibidas no momento.
-              </p>
-            )}
+              {vistaBreakdown.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1">
+                  {vistaBreakdown.map(([deputado, qtd]) => {
+                    const active = filters.vistaDeputado.includes(deputado);
+                    return (
+                      <button
+                        key={deputado}
+                        onClick={() => toggleFilterValue('vistaDeputado', deputado)}
+                        className={`px-2.5 py-1 rounded-lg border-2 text-xs font-extrabold flex items-center gap-1.5 transition-all ${
+                          active
+                            ? 'bg-[#c41e3a] text-white border-slate-900 shadow-[2px_2px_0px_0px_#0f172a]'
+                            : 'bg-[#f5f4ef] text-slate-800 border-slate-300 hover:border-slate-900'
+                        }`}
+                      >
+                        <span className="truncate max-w-[150px]">{deputado}</span>
+                        <span className={`px-1.5 py-0.2 rounded text-[10px] font-black ${
+                          active ? 'bg-white text-[#c41e3a]' : 'bg-[#c41e3a]/15 text-[#c41e3a]'
+                        }`}>
+                          {qtd}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs font-bold text-slate-400 italic py-2">
+                  Nenhum pedido de vista nas proposições filtradas.
+                </p>
+              )}
+            </div>
           </div>
 
-          {/* Distribuição por Tipo de Proposição + Gráfico Mondrian */}
-          <div className="lg:col-span-5 bg-white border-2 border-slate-900 rounded-xl p-4 shadow-[3px_3px_0px_0px_#0f172a] flex items-center justify-between gap-4">
+          {/* CAIXA 2: Requerimentos de Diligência (AO LADO DE PEDIDOS DE VISTA) */}
+          <div className="lg:col-span-4 bg-white border-2 border-slate-900 rounded-xl p-4 shadow-[3px_3px_0px_0px_#0f172a] flex flex-col justify-between">
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2.5 mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-sm bg-[#ffdb58] border border-slate-900"></span>
+                  <h3 className="font-black text-xs sm:text-sm uppercase tracking-wider text-slate-900">
+                    Requerimentos de Diligência
+                  </h3>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => {
+                      setOnlyDiligencia(!onlyDiligencia);
+                      if (!onlyDiligencia) setOnlyOpenDiligencia(false);
+                    }}
+                    className={`px-2 py-1 rounded-md border text-[10px] font-extrabold uppercase transition-colors ${
+                      onlyDiligencia
+                        ? 'bg-[#ffdb58] text-slate-900 border-slate-900'
+                        : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
+                    }`}
+                  >
+                    {onlyDiligencia ? '✓ Todas com Diligência' : `Todas (${stats.comDiligencia})`}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setOnlyOpenDiligencia(!onlyOpenDiligencia);
+                      if (!onlyOpenDiligencia) setOnlyDiligencia(false);
+                    }}
+                    className={`px-2 py-1 rounded-md border text-[10px] font-extrabold uppercase transition-colors ${
+                      onlyOpenDiligencia
+                        ? 'bg-slate-900 text-[#ffdb58] border-slate-900'
+                        : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
+                    }`}
+                  >
+                    {onlyOpenDiligencia ? '✓ Em Aberto' : `Em Aberto (${stats.comDiligenciaAberta})`}
+                  </button>
+                </div>
+              </div>
+
+              {diligenciaBreakdown.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1">
+                  {diligenciaBreakdown.map(([origem, qtd]) => {
+                    const active = filters.diligenciaOrigem.includes(origem);
+                    return (
+                      <button
+                        key={origem}
+                        onClick={() => toggleFilterValue('diligenciaOrigem', origem)}
+                        className={`px-2.5 py-1 rounded-lg border-2 text-xs font-extrabold flex items-center gap-1.5 transition-all ${
+                          active
+                            ? 'bg-[#ffdb58] text-slate-900 border-slate-900 shadow-[2px_2px_0px_0px_#0f172a]'
+                            : 'bg-[#f5f4ef] text-slate-800 border-slate-300 hover:border-slate-900'
+                        }`}
+                      >
+                        <span className="truncate max-w-[165px]" title={origem}>{origem}</span>
+                        <span className={`px-1.5 py-0.2 rounded text-[10px] font-black ${
+                          active ? 'bg-slate-900 text-[#ffdb58]' : 'bg-[#ffdb58]/60 text-slate-900'
+                        }`}>
+                          {qtd}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs font-bold text-slate-400 italic py-2">
+                  Nenhum requerimento de diligência nas proposições filtradas.
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* CAIXA 3: Distribuição por Tipo de Proposição + Gráfico Mondrian */}
+          <div className="lg:col-span-4 bg-white border-2 border-slate-900 rounded-xl p-4 shadow-[3px_3px_0px_0px_#0f172a] flex items-center justify-between gap-3">
             <div className="flex-1 min-w-0">
               <h3 className="font-black text-xs sm:text-sm uppercase tracking-wider text-slate-900 mb-2.5 flex items-center gap-2">
                 <span className="w-3 h-3 rounded-sm bg-[#008080] border border-slate-900"></span>
-                Tipos de Proposição (Multiseleção)
+                Tipos de Proposição
               </h3>
               <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1">
                 {pieData.map((slice) => {
@@ -1084,7 +1319,7 @@ export default function App() {
                     <button
                       key={slice.name}
                       onClick={() => toggleFilterValue('tipo', slice.name)}
-                      className={`px-2.5 py-1 rounded-md border text-[11px] font-extrabold uppercase flex items-center gap-1.5 transition-all ${
+                      className={`px-2 py-1 rounded-md border text-[11px] font-extrabold uppercase flex items-center gap-1.5 transition-all ${
                         selected
                           ? 'bg-slate-900 text-white border-slate-900'
                           : 'bg-slate-50 text-slate-800 border-slate-300 hover:border-slate-900'
@@ -1100,7 +1335,7 @@ export default function App() {
             </div>
 
             {pieData.length > 0 && (
-              <div className="w-20 h-20 sm:w-24 sm:h-24 flex-shrink-0 rounded-full border-2 border-slate-900 shadow-[2px_2px_0px_0px_#0f172a] overflow-hidden bg-white">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0 rounded-full border-2 border-slate-900 shadow-[2px_2px_0px_0px_#0f172a] overflow-hidden bg-white">
                 <svg viewBox="0 0 32 32" className="w-full h-full -rotate-90">
                   {(() => {
                     let cumulative = 0;
@@ -1160,7 +1395,7 @@ export default function App() {
             </div>
             <input
               type="text"
-              placeholder="Busca universal: nº da proposição, ementa, relator, quem pediu vista, nº da lei, autor..."
+              placeholder="Busca universal: nº da proposição, ementa, relator, quem pediu vista, diligência, nº da lei..."
               className="w-full py-3.5 pr-4 text-sm sm:text-base font-bold text-slate-900 placeholder-slate-400 outline-none bg-transparent"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -1260,6 +1495,20 @@ export default function App() {
               </span>
             )}
 
+            {onlyDiligencia && (
+              <span className="px-2.5 py-1 rounded-full bg-[#ffdb58] text-slate-900 border border-slate-900 text-xs font-bold flex items-center gap-1.5">
+                Com Requerimento de Diligência
+                <button onClick={() => setOnlyDiligencia(false)} className="hover:opacity-75">✕</button>
+              </span>
+            )}
+
+            {onlyOpenDiligencia && (
+              <span className="px-2.5 py-1 rounded-full bg-slate-900 text-[#ffdb58] text-xs font-bold flex items-center gap-1.5">
+                Diligência em Aberto
+                <button onClick={() => setOnlyOpenDiligencia(false)} className="hover:opacity-75">✕</button>
+              </span>
+            )}
+
             {toggleUtilidade && (
               <span className="px-2.5 py-1 rounded-full bg-[#ffdb58] text-slate-900 border border-slate-900 text-xs font-bold flex items-center gap-1.5">
                 Utilidade Pública
@@ -1294,7 +1543,7 @@ export default function App() {
         )}
 
         {/* ===============================================================
-            PAINEL EXPANSÍVEL DE MULTISELEÇÃO UNIVERSAL (8 DIMENSÕES)
+            PAINEL EXPANSÍVEL DE MULTISELEÇÃO UNIVERSAL (9 DIMENSÕES)
            =============================================================== */}
         {showFilters && (
           <section className="bg-white border-2 border-slate-900 rounded-2xl p-5 shadow-[4px_4px_0px_0px_#0f172a]">
@@ -1305,7 +1554,7 @@ export default function App() {
                   Filtros de Multiseleção Universal
                 </h3>
                 <p className="text-xs font-bold text-slate-500">
-                  Combine quantos critérios quiser (Fase, Quem pediu Vista, Comissão, Relator, Autoria, Tipo e Ano).
+                  Combine quantos critérios quiser (Fase, Quem pediu Vista, Diligência, Comissão, Relator, Autoria, Tipo e Ano).
                 </p>
               </div>
 
@@ -1326,16 +1575,17 @@ export default function App() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {[
                 { key: 'status', title: '1. Fase / Status', color: 'border-[#008080]' },
                 { key: 'vistaDeputado', title: '2. Vista (Com Quem)', color: 'border-[#c41e3a]' },
-                { key: 'setor', title: '3. Setor / Comissão Atual', color: 'border-[#ffdb58]' },
-                { key: 'relator', title: '4. Relator(a) na Comissão', color: 'border-[#008080]' },
-                { key: 'situacao', title: '5. Situação Oficial', color: 'border-slate-900' },
-                { key: 'autoria', title: '6. Autoria / Subscrição', color: 'border-[#c41e3a]' },
-                { key: 'tipo', title: '7. Tipo de Proposição', color: 'border-[#ffdb58]' },
-                { key: 'ano', title: '8. Ano da Proposição', color: 'border-slate-900' },
+                { key: 'diligenciaOrigem', title: '3. Diligência (Relator / Setor)', color: 'border-[#ffdb58]' },
+                { key: 'setor', title: '4. Setor / Comissão Atual', color: 'border-[#008080]' },
+                { key: 'relator', title: '5. Relator(a) na Comissão', color: 'border-slate-900' },
+                { key: 'situacao', title: '6. Situação Oficial', color: 'border-[#c41e3a]' },
+                { key: 'autoria', title: '7. Autoria / Subscrição', color: 'border-[#ffdb58]' },
+                { key: 'tipo', title: '8. Tipo de Proposição', color: 'border-[#008080]' },
+                { key: 'ano', title: '9. Ano da Proposição', color: 'border-slate-900' },
               ].map((col) => {
                 const options = (filterOptions[col.key] || []).filter((o) =>
                   !filterSearch.trim() || o.label.toLowerCase().includes(filterSearch.toLowerCase().trim())
@@ -1358,7 +1608,7 @@ export default function App() {
                       )}
                     </div>
 
-                    <div className="max-h-44 overflow-y-auto space-y-1 pr-1">
+                    <div className="max-h-40 overflow-y-auto space-y-1 pr-1">
                       {options.length > 0 ? (
                         options.map((opt) => {
                           const checked = filters[col.key].includes(opt.label);
@@ -1490,6 +1740,11 @@ export default function App() {
                         <span className={`px-2 py-0.5 rounded border border-slate-900 text-[10px] font-black uppercase tracking-wider ${theme.badgeBg}`}>
                           {theme.label}
                         </span>
+                        {item.temDiligencia && !item.temDiligenciaEmAberto && (
+                          <span className="px-2 py-0.5 rounded border border-slate-900 bg-[#ffdb58]/60 text-slate-900 text-[9px] font-black uppercase">
+                            Diligência
+                          </span>
+                        )}
                       </div>
                       <h3 className="text-2xl font-black text-slate-900 mt-2 tracking-tight">
                         {item.numero}
@@ -1532,6 +1787,26 @@ export default function App() {
                         </div>
                         <p className="text-xs font-black text-slate-900 leading-snug">
                           {item.pedidoVista}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Destaque Especial: Requerimento de Diligência (NOVO) */}
+                    {item.temDiligencia && (
+                      <div className="p-3 rounded-xl border-2 border-slate-900 bg-[#ffdb58]/35">
+                        <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-900 mb-1">
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-sm bg-slate-900"></span>
+                            {item.temDiligenciaEmAberto ? 'Requerimento de Diligência (Em Aberto)' : 'Requerimento de Diligência'}
+                          </span>
+                          {item.diligenciaResponsavel && (
+                            <span className="px-1.5 py-0.2 rounded bg-white/80 border border-slate-900 text-[9px] truncate max-w-[120px]">
+                              {item.diligenciaResponsavel}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs font-bold text-slate-900 leading-snug line-clamp-2">
+                          {item.detalheDiligencia}
                         </p>
                       </div>
                     )}
@@ -1707,7 +1982,7 @@ export default function App() {
                   <div className="p-4 flex-1 grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
                     {/* Coluna 1: Identificação */}
                     <div className="md:col-span-2 flex flex-col gap-1">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex flex-wrap items-center gap-1">
                         <span className="px-1.5 py-0.5 rounded bg-slate-900 text-white text-[10px] font-black uppercase">
                           {item.tipo}
                         </span>
@@ -1730,11 +2005,16 @@ export default function App() {
                       </p>
                     </div>
 
-                    {/* Coluna 3: Último Movimento & Vista */}
+                    {/* Coluna 3: Último Movimento, Vista e Diligência */}
                     <div className="md:col-span-3 space-y-1.5">
                       {item.pedidoVista && (
                         <div className="px-2.5 py-1 rounded-lg bg-[#c41e3a]/10 border border-[#c41e3a] text-[11px] font-black text-[#c41e3a]">
                           Vista: {item.pedidoVista}
+                        </div>
+                      )}
+                      {item.temDiligencia && (
+                        <div className="px-2.5 py-1 rounded-lg bg-[#ffdb58]/40 border border-slate-900 text-[11px] font-black text-slate-900">
+                          Diligência: {item.detalheDiligencia}
                         </div>
                       )}
                       <div className={`p-2 rounded-lg border text-xs font-bold ${theme.boxBg}`}>
@@ -1866,6 +2146,27 @@ export default function App() {
                     </p>
                     <p className="text-base font-black text-slate-900">
                       {selectedItem.pedidoVista}
+                    </p>
+                  </div>
+                )}
+
+                {/* Alerta de Requerimento de Diligência no Modal */}
+                {selectedItem.temDiligencia && (
+                  <div className="p-4 rounded-xl border-2 border-slate-900 bg-[#ffdb58]/40">
+                    <div className="flex justify-between items-center mb-1">
+                      <p className="text-xs font-black uppercase tracking-wider text-slate-900">
+                        {selectedItem.temDiligenciaEmAberto
+                          ? 'Requerimento de Diligência (Em Aberto / Aguardando)'
+                          : 'Requerimento de Diligência Registrado'}
+                      </p>
+                      {selectedItem.diligenciaResponsavel && (
+                        <span className="px-2 py-0.5 rounded bg-white border border-slate-900 text-xs font-black">
+                          {selectedItem.diligenciaResponsavel}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-base font-black text-slate-900">
+                      {selectedItem.detalheDiligencia}
                     </p>
                   </div>
                 )}

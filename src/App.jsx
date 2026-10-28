@@ -1,90 +1,55 @@
 import React, { useState, useEffect, useMemo } from 'react';
 
-const MONDRIAN_COLORS = [
-  'bg-[#c41e3a]', // Carmesim
-  'bg-[#008080]', // Azul Esverdeado
-  'bg-[#ffdb58]', // Mostarda
-];
+// Paleta Mondrian Suavizada (Carmesim, Azul Esverdeado e Amarelo Mostarda)
+const COLORS = {
+  crimson: '#c41e3a',
+  teal: '#008080',
+  mustard: '#ffdb58',
+  ink: '#0f172a',
+  bg: '#f5f4ef',
+};
 
 const PIE_COLORS = [
-  '#008080', '#c41e3a', '#ffdb58', '#2b2b2b', '#8a2be2', 
-  '#e67e22', '#16a085', '#d35400', '#2980b9', '#7f8c8d', '#8e44ad'
+  '#008080', '#c41e3a', '#ffdb58', '#1e293b', '#0d9488',
+  '#e11d48', '#eab308', '#475569', '#2563eb', '#7c3aed', '#ea580c'
 ];
+
+const PROCESSO_PREFIXES = ['PL', 'PEC', 'PLC', 'PDL', 'PRC', 'MPV', 'VET', 'MSG', 'PSA'];
 
 export default function App() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
+
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState('card'); 
-  const [activeTab, setActiveTab] = useState('processo'); 
-  
+  const [viewMode, setViewMode] = useState('card');
+  const [activeTab, setActiveTab] = useState('processo');
+
   const [showFilters, setShowFilters] = useState(false);
-  const [toggleAprovadas, setToggleAprovadas] = useState(false);
-  const [toggleExcetoAprovadas, setToggleExcetoAprovadas] = useState(false);
+  const [filterSearch, setFilterSearch] = useState('');
+  const [onlyOpenVista, setOnlyOpenVista] = useState(false);
   const [toggleUtilidade, setToggleUtilidade] = useState(false);
+
+  // Estado de Multiseleção Universal
   const [filters, setFilters] = useState({
-    tipo: [],
-    situacao: [],
-    relator: [],
-    vista: [],
-    macro: [] 
+    status: [],        // 'Em Tramitação', 'Aprovado', 'Virou Lei', 'Com Vista', 'Vetado', 'Encerrado', etc.
+    tipo: [],          // PL, PLC, PEC, REQ, MOC, IND...
+    situacao: [],      // Situação oficial da ALESC
+    setor: [],         // Comissão ou Setor Atual
+    relator: [],       // Relator(a) atual
+    vistaDeputado: [], // Parlamentar que pediu vista
+    autoria: [],       // Autor ou subscritor
+    ano: [],           // Ano da proposição
   });
 
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const [toastMsg, setToastMsg] = useState(''); 
+  const [toastMsg, setToastMsg] = useState('');
   const [selectedItem, setSelectedItem] = useState(null);
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  const [sortConfig, setSortConfig] = useState({ key: 'movimento', direction: 'desc' });
 
-  const formatarData = (dataString) => {
-    if (!dataString || dataString === '-') return '-';
-    const apenasData = dataString.split(/[T ]/)[0];
-    if (apenasData.includes('-')) {
-      return apenasData.split('-').reverse().join('/');
-    }
-    return apenasData;
-  };
-
-  const formatarUltimoMovimento = (texto) => {
-    if (!texto || texto === '-') return '-';
-    return texto.replace(/^\d{2}\/\d{2}\/\d{4}\s*-\s*/, '');
-  };
-
-  const extrairDataUltimoMovimento = (texto) => {
-    if (!texto || texto === '-') return '';
-    const match = texto.match(/^(\d{2}\/\d{2}\/\d{4})/);
-    return match ? match[1] : '';
-  };
-
-  const getNumero = (item) => item['Número da Proposição'] || item['Numero da Proposicao'] || item['numero'] || '';
-  const getEmenta = (item) => item['Ementa'] || item['ementa'] || item['EMENTA'] || item['Resumo'] || '';
-  const getUltimoMovimento = (item) => item['Último Movimento'] || item['Ultimo Movimento'] || item['Ultimo movimento'] || item['ultimo movimento'] || '';
-  const getRelator = (item) => item['Relator(a) na Comissão'] || item['Relator'] || item['relator'] || '';
-  const getSituacao = (item) => item['Situação'] || item['Situacao'] || item['situacao'] || '';
-  const getSetor = (item) => item['Setor Atual'] || item['Setor atual'] || item['setor'] || '';
-  const getObservacoes = (item) => item['Observações'] || item['Observacoes'] || item['observacoes'] || '';
-  const getLink = (item) => item['Link'] || item['link'] || '';
-  const getTipoProposicao = (item) => item['Tipo de Proposição'] || item['Tipo de Proposicao'] || (activeTab === 'processo' ? 'Processo' : 'Atividade');
-  const getProcessosAnexos = (item) => item['Processos anexos'] || item['Processos Anexos'] || '';
-  
-  const getPedidoVista = (item) => {
-      let v = item['Pedido de Vista'] || item['pedido de vista'] || item['Pedido de vista'] || '';
-      return (v === '-') ? '' : v;
-  };
-  const getInformacaoRelatoria = (item) => {
-      let r = item['Informação da Relatoria'] || item['Informacao da relatoria'] || item['Informacao da Relatoria'] || item['informacao_relatoria'] || '';
-      return (r === '-') ? '' : r;
-  };
-  const getLinksAdicionais = (item) => {
-      return item['Links Adicionais'] || item['links_adicionais'] || item['Links adicionais'] || '';
-  };
-  const getDataPublicacaoPreLei = (item) => {
-      return item['Data da Publicação da Redação Final'] || item['Data Publicação Pré-Lei'] || '';
-  };
-
+  // Resolução automática da variável de ambiente (Vercel / Vite / CRA / Next)
   const API_URL = (() => {
     try {
       if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) {
@@ -96,20 +61,20 @@ export default function App() {
         return process.env.VITE_API_URL || process.env.REACT_APP_API_URL || process.env.NEXT_PUBLIC_API_URL;
       }
     } catch (e) {}
-    return "COLE_SUA_URL_DO_SCRIPT_AQUI";
+    return 'COLE_SUA_URL_DO_SCRIPT_AQUI';
   })();
 
   const fetchData = async () => {
     setLoading(true);
     setError(null);
     try {
-      if (!API_URL || API_URL === "COLE_SUA_URL_DO_SCRIPT_AQUI") {
-        throw new Error("A URL do Google Script não foi configurada.");
+      if (!API_URL || API_URL === 'COLE_SUA_URL_DO_SCRIPT_AQUI') {
+        throw new Error('A URL do Google Script não foi configurada nas variáveis de ambiente.');
       }
       const response = await fetch(API_URL);
-      if (!response.ok) throw new Error('Falha ao aceder aos dados da API.');
+      if (!response.ok) throw new Error('Falha ao acessar os dados da planilha via API.');
       const jsonData = await response.json();
-      setData(jsonData);
+      setData(Array.isArray(jsonData) ? jsonData : []);
     } catch (err) {
       console.error(err);
       setError(err.message);
@@ -118,1378 +83,1865 @@ export default function App() {
     }
   };
 
+  useEffect(() => {
+    fetchData();
+  }, []);
+
   const showToast = (message) => {
     setToastMsg(message);
-    setTimeout(() => setToastMsg(''), 5000);
+    setTimeout(() => setToastMsg(''), 4500);
   };
 
+  // Helpers de formatação
+  const formatarData = (dataString) => {
+    if (!dataString || dataString === '-') return '-';
+    const apenasData = String(dataString).split(/[T ]/)[0];
+    if (apenasData.includes('-')) {
+      return apenasData.split('-').reverse().join('/');
+    }
+    return apenasData;
+  };
+
+  const formatarUltimoMovimento = (texto) => {
+    if (!texto || texto === '-') return '-';
+    return String(texto).replace(/^\d{2}\/\d{2}\/\d{4}\s*-\s*/, '');
+  };
+
+  const extrairDataUltimoMovimento = (texto) => {
+    if (!texto || texto === '-') return '';
+    const match = String(texto).match(/^(\d{2}\/\d{2}\/\d{4})/);
+    return match ? match[1] : '';
+  };
+
+  const parseDateToTimestamp = (dateStr) => {
+    if (!dateStr || dateStr === '-') return 0;
+    const match = String(dateStr).match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    if (match) return new Date(`${match[3]}-${match[2]}-${match[1]}`).getTime();
+    return 0;
+  };
+
+  // =====================================================================
+  // 1. ENRIQUECIMENTO CENTRALIZADO DOS DADOS (SINGLE-PASS)
+  // =====================================================================
+  const enrichedData = useMemo(() => {
+    return data
+      .map((raw) => {
+        const numero = String(raw['Número da Proposição'] || raw['Numero da Proposicao'] || raw['numero'] || '').trim();
+        if (!numero) return null;
+
+        const prefix = numero.toUpperCase().split('/')[0].replace('.', '').trim();
+        const isProcesso = PROCESSO_PREFIXES.includes(prefix);
+
+        const anoMatch = numero.match(/\/(\d{4})/);
+        const ano = anoMatch ? anoMatch[1] : 'S/A';
+
+        const tipoRaw = String(raw['Tipo de Proposição'] || raw['Tipo de Proposicao'] || '').trim();
+        const tipo = tipoRaw && tipoRaw !== '-' ? tipoRaw : (prefix || (isProcesso ? 'PL' : 'ATIV'));
+
+        const ementa = String(raw['Ementa'] || raw['ementa'] || raw['EMENTA'] || raw['Resumo'] || '').trim();
+        const ultimoMovimento = String(raw['Último Movimento'] || raw['Ultimo Movimento'] || raw['Ultimo movimento'] || raw['ultimo movimento'] || '').trim();
+        const relator = String(raw['Relator(a) na Comissão'] || raw['Relator'] || raw['relator'] || '').trim();
+        const situacao = String(raw['Situação'] || raw['Situacao'] || raw['situacao'] || raw['Situação Atual'] || raw['Situação atual'] || '').trim();
+        const setor = String(raw['Setor Atual'] || raw['Setor atual'] || raw['setor'] || '').trim();
+        const observacoes = String(raw['Observações'] || raw['Observacoes'] || raw['observacoes'] || '').trim();
+        const link = String(raw['Link'] || raw['link'] || '').trim();
+        const autoriaRaw = String(raw['Autoria'] || raw['autoria'] || '').trim();
+        const dataEntrada = String(raw['Data de entrada'] || raw['Data de Entrada'] || '').trim();
+        const dataVerificacao = String(raw['Data da Verificação'] || '').trim();
+        const dataDistribuicao = String(raw['Data de Distribuição'] || '').trim();
+        const processosAnexos = String(raw['Processos anexos'] || raw['Processos Anexos'] || '').trim();
+
+        let pedidoVista = String(raw['Pedido de Vista'] || raw['pedido de vista'] || raw['Pedido de vista'] || '').trim();
+        if (pedidoVista === '-') pedidoVista = '';
+
+        let infoRelatoria = String(raw['Informação da Relatoria'] || raw['Informacao da relatoria'] || raw['Informacao da Relatoria'] || raw['informacao_relatoria'] || '').trim();
+        if (infoRelatoria === '-') infoRelatoria = '';
+
+        const dataRedacaoFinal = String(raw['Data da Publicação da Redação Final'] || raw['Data Publicação Pré-Lei'] || '').trim();
+
+        // Extrai lista de autores/subscritores
+        const autoresList = autoriaRaw
+          ? autoriaRaw.split(/;|,/).map((a) => a.trim()).filter(Boolean)
+          : [];
+
+        // Extrai parlamentares do Pedido de Vista e identifica se está em aberto
+        const vistaDeputados = [];
+        let temVistaEmAberto = false;
+        if (pedidoVista) {
+          const partesVista = pedidoVista.split(';').map((s) => s.trim()).filter(Boolean);
+          partesVista.forEach((parte) => {
+            const lowerParte = parte.toLowerCase();
+            if (!lowerParte.includes('devolvido')) {
+              temVistaEmAberto = true;
+            }
+            // Limpa parênteses de datas para obter o nome limpo do parlamentar no filtro
+            const nomeLimpo = parte
+              .replace(/\(.*?\)/g, '')
+              .replace(/^vista\s+de\s+/i, '')
+              .replace(/^\d{2}\/\d{2}\/\d{4}\s*:\s*/i, '')
+              .trim();
+            if (nomeLimpo && !vistaDeputados.includes(nomeLimpo)) {
+              vistaDeputados.push(nomeLimpo);
+            }
+          });
+        }
+
+        // Links adicionais (Lei / Veto / Deliberação)
+        let parsedLinks = [];
+        try {
+          const rawLinks = raw['Links Adicionais'] || raw['links_adicionais'] || raw['Links adicionais'] || '';
+          if (rawLinks && rawLinks !== '-') parsedLinks = JSON.parse(rawLinks);
+        } catch (e) {}
+
+        const sitLower = situacao.toLowerCase();
+        const ultMovLower = ultimoMovimento.toLowerCase();
+        const obsLower = observacoes.toLowerCase();
+
+        // Extração de Número da Lei
+        let numeroLei = '';
+        const leiObjComNum = parsedLinks.find((l) => l.numeroLei);
+        if (leiObjComNum && leiObjComNum.numeroLei) {
+          numeroLei = String(leiObjComNum.numeroLei).trim();
+        } else {
+          const leiLinkCandidate = parsedLinks.find((l) => /\blei\b/i.test(l.label || '') || (l.label || '').toLowerCase().includes('promulgad'));
+          if (leiLinkCandidate && leiLinkCandidate.url) {
+            const matchUrl = leiLinkCandidate.url.match(/\/(\d+)_/);
+            if (matchUrl) numeroLei = matchUrl[1];
+          }
+        }
+        if (!numeroLei) {
+          const regexLei = /(?:Lei|Norma Jurídica)(?:\s*(?:Complementar|Ordinária))?(?:\s*(?:n[º°o.]|número)?\s*)(\d+[\.\d]*)/i;
+          const mSit = situacao.match(regexLei) || ultimoMovimento.match(regexLei) || observacoes.match(regexLei);
+          if (mSit && mSit[1]) numeroLei = mSit[1];
+        }
+
+        const vetoLink = parsedLinks.find((l) => (l.label || '').toLowerCase().includes('veto')) || null;
+        const leiLink = parsedLinks.find((l) => /\blei\b/i.test(l.label || '') || (l.label || '').toLowerCase().includes('promulgad')) || null;
+
+        let isVeto = false;
+        let isVirouLei = false;
+        let isAprovado = false;
+
+        if (isProcesso) {
+          const temPalavraVeto = sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto');
+          if (temPalavraVeto || vetoLink) isVeto = true;
+
+          const temCertezaLei =
+            Boolean(numeroLei) ||
+            Boolean(leiLink && leiLink.url) ||
+            sitLower.includes('transformado em lei') ||
+            sitLower.includes('norma jurídica') ||
+            sitLower.includes('lei sancionada') ||
+            sitLower.includes('lei promulgada') ||
+            ultMovLower.includes('transformado em lei') ||
+            ultMovLower.includes('norma jurídica') ||
+            ultMovLower.includes('sancionad') ||
+            ultMovLower.includes('promulgad');
+
+          const temAprovacaoPlenarioOuRedacao =
+            temCertezaLei ||
+            Boolean(leiLink) ||
+            Boolean(dataRedacaoFinal && dataRedacaoFinal !== '-') ||
+            sitLower.includes('redação final') ||
+            sitLower.includes('autógrafo') ||
+            sitLower.includes('aprovad') ||
+            ultMovLower.includes('redação final') ||
+            ultMovLower.includes('autógrafo') ||
+            ultMovLower.includes('aprovado em') ||
+            ultMovLower.includes('aprovado por');
+
+          if (temCertezaLei && !isVeto) isVirouLei = true;
+          if (temAprovacaoPlenarioOuRedacao && !isVeto && !sitLower.includes('rejeitad')) isAprovado = true;
+        }
+
+        const isEncerrado =
+          !isVirouLei &&
+          !isAprovado &&
+          !isVeto &&
+          (sitLower.includes('arquivad') ||
+            sitLower.includes('rejeitad') ||
+            sitLower.includes('retirad') ||
+            sitLower.includes('prejudicad') ||
+            sitLower.includes('encerrad'));
+
+        // Classificação principal de fase para articuladores
+        let fasePrincipal = 'Em Tramitação';
+        if (isProcesso) {
+          if (isVirouLei) fasePrincipal = 'Virou Lei';
+          else if (isAprovado) fasePrincipal = 'Aprovado';
+          else if (isVeto) fasePrincipal = 'Vetado';
+          else if (isEncerrado) fasePrincipal = 'Encerrado';
+          else fasePrincipal = 'Em Tramitação';
+        } else {
+          if (sitLower.includes('arquivad') || sitLower.includes('encerrad') || sitLower.includes('concluíd')) {
+            fasePrincipal = 'Arquivado';
+          } else if (sitLower.includes('encaminhado') || ultMovLower.includes('encaminhado') || sitLower.includes('expedido') || ultMovLower.includes('expedido') || sitLower.includes('aprovad')) {
+            fasePrincipal = 'Encaminhado / Aprovado';
+          } else if (sitLower.includes('aguardando') || ultMovLower.includes('aguardando') || sitLower.includes('diligência') || ultMovLower.includes('diligência')) {
+            fasePrincipal = 'Aguardando Resposta';
+          } else {
+            fasePrincipal = 'Em Tramitação';
+          }
+        }
+
+        const isTramitando = fasePrincipal === 'Em Tramitação' || fasePrincipal === 'Aguardando Resposta';
+
+        // Tags de status que permitem filtro múltiplo cruzado (ex.: Em Tramitação + Com Vista)
+        const statusTags = [fasePrincipal];
+        if (isAprovado && !statusTags.includes('Aprovado')) statusTags.push('Aprovado');
+        if (pedidoVista) statusTags.push('Com Pedido de Vista');
+
+        const matchNum = numero.match(/(\d+)\/(\d+)/);
+        const sortNumeroVal = matchNum ? parseInt(matchNum[2], 10) * 100000 + parseInt(matchNum[1], 10) : 0;
+
+        return {
+          raw,
+          numero,
+          prefix,
+          ano,
+          isProcesso,
+          tipo,
+          ementa,
+          ultimoMovimento,
+          dataUltMov: extrairDataUltimoMovimento(ultimoMovimento),
+          textoUltMov: formatarUltimoMovimento(ultimoMovimento),
+          relator: relator && relator !== '-' ? relator : '',
+          situacao: situacao && situacao !== '-' ? situacao : 'Não informada',
+          setor: setor && setor !== '-' ? setor : 'Não informado',
+          observacoes,
+          link,
+          autoria: autoriaRaw,
+          autoresList,
+          dataEntrada,
+          dataVerificacao,
+          dataDistribuicao,
+          processosAnexos,
+          pedidoVista,
+          vistaDeputados,
+          temVistaEmAberto,
+          infoRelatoria,
+          dataRedacaoFinal,
+          parsedLinks,
+          numeroLei,
+          vetoLink,
+          leiLink,
+          isVeto,
+          isVirouLei,
+          isAprovado,
+          isEncerrado,
+          isTramitando,
+          fasePrincipal,
+          statusTags,
+          sortNumeroVal,
+          sortMovimentoVal: parseDateToTimestamp(ultimoMovimento),
+          sortPublicacaoVal: parseDateToTimestamp(dataRedacaoFinal),
+        };
+      })
+      .filter(Boolean);
+  }, [data]);
+
+  // =====================================================================
+  // 2. FILTRAGEM UNIVERSAL E ESTATÍSTICAS DO DASHBOARD
+  // =====================================================================
+  const { tabData, filteredData, stats, filterOptions, vistaBreakdown, pieData } = useMemo(() => {
+    const tabItems = enrichedData.filter((item) =>
+      activeTab === 'processo' ? item.isProcesso : !item.isProcesso
+    );
+
+    // Coleta de opções e contadores para os Filtros Universais de Multiseleção
+    const countMap = {
+      status: {},
+      tipo: {},
+      situacao: {},
+      setor: {},
+      relator: {},
+      vistaDeputado: {},
+      autoria: {},
+      ano: {},
+    };
+
+    const inc = (category, key) => {
+      if (!key || key === '-') return;
+      countMap[category][key] = (countMap[category][key] || 0) + 1;
+    };
+
+    tabItems.forEach((item) => {
+      item.statusTags.forEach((st) => inc('status', st));
+      inc('tipo', item.tipo);
+      inc('situacao', item.situacao);
+      inc('setor', item.setor);
+      if (item.relator) inc('relator', item.relator);
+      item.vistaDeputados.forEach((dep) => inc('vistaDeputado', dep));
+      item.autoresList.forEach((aut) => inc('autoria', aut));
+      inc('ano', item.ano);
+    });
+
+    // Aplicação dos filtros selecionados
+    const filtered = tabItems.filter((item) => {
+      if (toggleUtilidade && !item.ementa.toLowerCase().includes('utilidade pública')) return false;
+      if (onlyOpenVista && (!item.pedidoVista || !item.temVistaEmAberto)) return false;
+
+      if (filters.status.length > 0) {
+        const matchStatus = filters.status.some((st) => item.statusTags.includes(st));
+        if (!matchStatus) return false;
+      }
+
+      if (filters.tipo.length > 0 && !filters.tipo.includes(item.tipo)) return false;
+      if (filters.situacao.length > 0 && !filters.situacao.includes(item.situacao)) return false;
+      if (filters.setor.length > 0 && !filters.setor.includes(item.setor)) return false;
+      if (filters.relator.length > 0 && !filters.relator.includes(item.relator)) return false;
+      if (filters.ano.length > 0 && !filters.ano.includes(item.ano)) return false;
+
+      if (filters.vistaDeputado.length > 0) {
+        const matchVista = filters.vistaDeputado.some((dep) => item.vistaDeputados.includes(dep));
+        if (!matchVista) return false;
+      }
+
+      if (filters.autoria.length > 0) {
+        const matchAutor = filters.autoria.some((aut) => item.autoresList.includes(aut));
+        if (!matchAutor) return false;
+      }
+
+      if (searchTerm.trim()) {
+        const term = searchTerm.toLowerCase().trim();
+        const searchable = [
+          item.numero,
+          item.ementa,
+          item.situacao,
+          item.setor,
+          item.relator,
+          item.pedidoVista,
+          item.autoria,
+          item.ultimoMovimento,
+          item.observacoes,
+          item.numeroLei ? `lei ${item.numeroLei}` : '',
+          item.fasePrincipal,
+          item.tipo,
+        ]
+          .join(' ')
+          .toLowerCase();
+
+        if (!searchable.includes(term)) return false;
+      }
+
+      return true;
+    });
+
+    // Estatísticas calculadas sobre o conjunto filtrado
+    const dashboard = {
+      total: filtered.length,
+      tramitando: 0,
+      aprovadosTotal: 0,
+      virouLei: 0,
+      apenasAprovadoPlenario: 0,
+      comVista: 0,
+      comVistaAberta: 0,
+      vetados: 0,
+      encerrados: 0,
+      aguardando: 0,
+      encaminhados: 0,
+      arquivados: 0,
+      tipos: {},
+    };
+
+    const vistaCounter = {};
+
+    filtered.forEach((item) => {
+      if (item.fasePrincipal === 'Em Tramitação') dashboard.tramitando++;
+      if (item.isAprovado) dashboard.aprovadosTotal++;
+      if (item.isVirouLei) dashboard.virouLei++;
+      if (item.isAprovado && !item.isVirouLei) dashboard.apenasAprovadoPlenario++;
+      if (item.pedidoVista) {
+        dashboard.comVista++;
+        if (item.temVistaEmAberto) dashboard.comVistaAberta++;
+        item.vistaDeputados.forEach((dep) => {
+          vistaCounter[dep] = (vistaCounter[dep] || 0) + 1;
+        });
+      }
+      if (item.isVeto) dashboard.vetados++;
+      if (item.isEncerrado) dashboard.encerrados++;
+
+      if (!item.isProcesso) {
+        if (item.fasePrincipal === 'Aguardando Resposta') dashboard.aguardando++;
+        if (item.fasePrincipal === 'Encaminhado / Aprovado') dashboard.encaminhados++;
+        if (item.fasePrincipal === 'Arquivado') dashboard.arquivados++;
+      }
+
+      dashboard.tipos[item.tipo] = (dashboard.tipos[item.tipo] || 0) + 1;
+    });
+
+    const generatedPie = Object.entries(dashboard.tipos)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, value], index) => ({
+        name,
+        value,
+        color: PIE_COLORS[index % PIE_COLORS.length],
+      }));
+
+    const formatOpts = (obj) =>
+      Object.entries(obj)
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .map(([label, count]) => ({ label, count }));
+
+    return {
+      tabData: tabItems,
+      filteredData: filtered,
+      stats: dashboard,
+      pieData: generatedPie,
+      vistaBreakdown: Object.entries(vistaCounter).sort((a, b) => b[1] - a[1]),
+      filterOptions: {
+        status: formatOpts(countMap.status),
+        vistaDeputado: formatOpts(countMap.vistaDeputado),
+        tipo: formatOpts(countMap.tipo),
+        situacao: formatOpts(countMap.situacao),
+        setor: formatOpts(countMap.setor),
+        relator: formatOpts(countMap.relator),
+        autoria: formatOpts(countMap.autoria),
+        ano: Object.entries(countMap.ano)
+          .sort((a, b) => b[0].localeCompare(a[0]))
+          .map(([label, count]) => ({ label, count })),
+      },
+    };
+  }, [enrichedData, activeTab, filters, searchTerm, toggleUtilidade, onlyOpenVista]);
+
+  // Ordenação
+  const sortedFilteredData = useMemo(() => {
+    if (!sortConfig.key) return filteredData;
+    const dir = sortConfig.direction === 'asc' ? 1 : -1;
+
+    return [...filteredData].sort((a, b) => {
+      if (sortConfig.key === 'numero') {
+        return (a.sortNumeroVal - b.sortNumeroVal) * dir;
+      }
+      if (sortConfig.key === 'movimento') {
+        return (a.sortMovimentoVal - b.sortMovimentoVal) * dir;
+      }
+      if (sortConfig.key === 'publicacao') {
+        return (a.sortPublicacaoVal - b.sortPublicacaoVal) * dir;
+      }
+      if (sortConfig.key === 'ementa') {
+        return a.ementa.localeCompare(b.ementa) * dir;
+      }
+      if (sortConfig.key === 'situacao') {
+        return a.situacao.localeCompare(b.situacao) * dir;
+      }
+      return 0;
+    });
+  }, [filteredData, sortConfig]);
+
+  const handleSort = (key) => {
+    setSortConfig((prev) => ({
+      key,
+      direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc',
+    }));
+  };
+
+  // Controle de Multiseleção Universal
+  const toggleFilterValue = (category, value) => {
+    setFilters((prev) => {
+      const list = prev[category] || [];
+      const exists = list.includes(value);
+      return {
+        ...prev,
+        [category]: exists ? list.filter((v) => v !== value) : [...list, value],
+      };
+    });
+  };
+
+  const clearCategory = (category) => {
+    setFilters((prev) => ({ ...prev, [category]: [] }));
+  };
+
+  const limparTodosFiltros = () => {
+    setFilters({
+      status: [],
+      tipo: [],
+      situacao: [],
+      setor: [],
+      relator: [],
+      vistaDeputado: [],
+      autoria: [],
+      ano: [],
+    });
+    setOnlyOpenVista(false);
+    setToggleUtilidade(false);
+    setSearchTerm('');
+  };
+
+  const totalActiveFilters = useMemo(() => {
+    return (
+      Object.values(filters).reduce((acc, arr) => acc + arr.length, 0) +
+      (onlyOpenVista ? 1 : 0) +
+      (toggleUtilidade ? 1 : 0)
+    );
+  }, [filters, onlyOpenVista, toggleUtilidade]);
+
+  // Gravação de Observações no Google Apps Script
   const handleSaveObservacao = async (numero) => {
     setIsSaving(true);
     try {
       const response = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ numero: numero, observacao: editValue })
+        body: JSON.stringify({ numero, observacao: editValue }),
       });
       const result = await response.json();
       if (result.status === 'success') {
-        setData(prevData => prevData.map(item => getNumero(item) === numero ? { ...item, 'Observações': editValue } : item));
-        if(selectedItem && getNumero(selectedItem) === numero) {
-          setSelectedItem(prev => ({...prev, 'Observações': editValue}));
+        setData((prevData) =>
+          prevData.map((row) => {
+            const numRow = row['Número da Proposição'] || row['Numero da Proposicao'] || row['numero'] || '';
+            return numRow === numero ? { ...row, Observações: editValue } : row;
+          })
+        );
+        if (selectedItem && selectedItem.numero === numero) {
+          setSelectedItem((prev) => ({ ...prev, observacoes: editValue }));
         }
         setEditingId(null);
-        showToast("Observação guardada com sucesso!");
+        showToast('Observação salva na planilha!');
       } else {
-        showToast("Erro ao guardar: " + result.message);
+        showToast('Erro ao salvar: ' + (result.message || 'Tente novamente'));
       }
-    } catch (error) {
-      console.error(error);
-      showToast("Erro de comunicação ao guardar a observação.");
+    } catch (err) {
+      console.error(err);
+      showToast('Erro de comunicação ao salvar a observação.');
     } finally {
       setIsSaving(false);
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const goToFrontPage = () => {
-     setActiveTab('processo');
-     limparFiltrosAvançados();
-     setSearchTerm('');
-     setToggleAprovadas(false);
-     setToggleExcetoAprovadas(false);
-     setToggleUtilidade(false);
-  };
-
-  const { filteredData, dashboardStats, filterOptions, pieData } = useMemo(() => {
-    let filtered = data.filter(item => {
-      const num = getNumero(item).toUpperCase();
-      if (!num) return false;
-
-      const prefix = num.split('/')[0].replace('.', ''); 
-      const processoPrefixes = ['PL', 'PEC', 'PLC', 'PDL', 'PRC', 'MPV', 'VET', 'MSG', 'PSA'];
-      const isProcesso = processoPrefixes.includes(prefix);
-      
-      if (activeTab === 'processo' && !isProcesso) return false;
-      if (activeTab === 'atividade' && isProcesso) return false;
-
-      const sitLower = getSituacao(item).toLowerCase();
-      const ultMovLower = getUltimoMovimento(item).toLowerCase();
-      const obsLower = getObservacoes(item).toLowerCase();
-      const emenLower = getEmenta(item).toLowerCase();
-      
-      let parsedLinks = [];
-      try {
-        const rawLinks = getLinksAdicionais(item);
-        if (rawLinks && rawLinks !== '-') parsedLinks = JSON.parse(rawLinks);
-      } catch(e) {}
-      
-      let isVeto = false;
-      let isAprovadoLei = false;
-
-      if (isProcesso) {
-         const temPalavraVeto = sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto');
-         const temLinkVeto = parsedLinks.some(l => l.label.toLowerCase().includes('veto'));
-         if (temPalavraVeto || temLinkVeto) isVeto = true;
-
-         const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica') || ultMovLower.includes('transformado em lei') || ultMovLower.includes('redação final');
-         const temLinkLei = parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
-         if ((temPalavraLei || temLinkLei) && !isVeto) isAprovadoLei = true;
-      }
-
-      let macroStatus = '';
-      if (activeTab === 'processo') {
-        if (isAprovadoLei) macroStatus = 'Aprovados';
-        else if (isVeto) macroStatus = 'Vetados';
-        else if (sitLower.includes('arquivad') || sitLower.includes('rejeitad') || sitLower.includes('retirad') || sitLower.includes('concluíd') || sitLower.includes('encerrad')) macroStatus = 'Encerrados';
-        else macroStatus = 'Em Tramitação';
-      } else {
-        if (sitLower.includes('arquivad') || sitLower.includes('encerrad') || sitLower.includes('concluíd')) macroStatus = 'Arquivados';
-        else if (sitLower.includes('encaminhado') || ultMovLower.includes('encaminhado') || sitLower.includes('expedido') || ultMovLower.includes('expedido')) macroStatus = 'Encaminhados';
-        else if (sitLower.includes('aguardando') || ultMovLower.includes('aguardando') || sitLower.includes('diligência') || ultMovLower.includes('diligência')) macroStatus = 'Aguardando';
-        else macroStatus = 'Em Tramitação';
-      }
-
-      if (filters.macro.length > 0 && !filters.macro.includes(macroStatus)) return false;
-      if (toggleAprovadas && !isAprovadoLei) return false;
-      if (toggleExcetoAprovadas && isAprovadoLei) return false;
-      if (toggleUtilidade && !emenLower.includes('utilidade pública')) return false;
-
-      if (filters.tipo.length > 0 && !filters.tipo.includes(getTipoProposicao(item))) return false;
-      
-      if (filters.situacao.length > 0) {
-          const matchSituacaoExata = filters.situacao.includes(getSituacao(item));
-          const procuraPorVeto = filters.situacao.some(s => s.toLowerCase().includes('veto'));
-          if (!matchSituacaoExata && !(procuraPorVeto && isVeto)) {
-              return false;
-          }
-      }
-
-      if (filters.relator.length > 0 && !filters.relator.includes(getRelator(item))) return false;
-      if (filters.vista.length > 0 && !filters.vista.includes(getPedidoVista(item))) return false;
-
-      const term = searchTerm.toLowerCase();
-      if (term) {
-        const linksText = parsedLinks.map(l => l.label.toLowerCase()).join(' ');
-        return num.toLowerCase().includes(term) || 
-               getRelator(item).toLowerCase().includes(term) || 
-               sitLower.includes(term) || 
-               emenLower.includes(term) ||
-               getPedidoVista(item).toLowerCase().includes(term) ||
-               (item['Data de entrada'] || '').toLowerCase().includes(term) ||
-               getSetor(item).toLowerCase().includes(term) ||
-               (item['Data de Distribuição'] || '').toLowerCase().includes(term) ||
-               getTipoProposicao(item).toLowerCase().includes(term) ||
-               macroStatus.toLowerCase().includes(term) ||
-               ultMovLower.includes(term) ||
-               obsLower.includes(term) ||
-               linksText.includes(term);
-      }
-      
-      return true;
-    });
-
-    const baseDataForFilters = data.filter(item => {
-      const prefix = (getNumero(item).toUpperCase() || '').split('/')[0].replace('.', ''); 
-      const isProcesso = ['PL', 'PEC', 'PLC', 'PDL', 'PRC', 'MPV', 'VET', 'MSG', 'PSA'].includes(prefix);
-      return activeTab === 'processo' ? isProcesso : !isProcesso;
-    });
-
-    const optTipo = new Set(), optSituacao = new Set(), optRelator = new Set(), optVista = new Set();
-    baseDataForFilters.forEach(item => {
-      const t = getTipoProposicao(item); if (t && t !== '-') optTipo.add(t);
-      const s = getSituacao(item); if (s && s !== '-') optSituacao.add(s);
-      const r = getRelator(item); if (r && r !== '-') optRelator.add(r);
-      const v = getPedidoVista(item); if (v && v !== '-') optVista.add(v);
-    });
-
-    const stats = {
-      total: filtered.length,
-      macro: { Aprovados: 0, Vetados: 0, Encerrados: 0, 'Em Tramitação': 0, Aguardando: 0, Encaminhados: 0, Arquivados: 0 },
-      tipos: {}
-    };
-
-    filtered.forEach(item => {
-      const sitLower = getSituacao(item).toLowerCase();
-      const ultMovLower = getUltimoMovimento(item).toLowerCase();
-      const obsLower = getObservacoes(item).toLowerCase();
-      
-      let parsedLinks = [];
-      try {
-        const rawLinks = getLinksAdicionais(item);
-        if (rawLinks && rawLinks !== '-') parsedLinks = JSON.parse(rawLinks);
-      } catch(e) {}
-      
-      let macroStatus = '';
-      if (activeTab === 'processo') {
-         let isVeto = false;
-         let isAprovadoLei = false;
-
-         const temPalavraVeto = sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto');
-         const temLinkVeto = parsedLinks.some(l => l.label.toLowerCase().includes('veto'));
-         if (temPalavraVeto || temLinkVeto) isVeto = true;
-
-         const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica') || ultMovLower.includes('transformado em lei') || ultMovLower.includes('redação final');
-         const temLinkLei = parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
-         if ((temPalavraLei || temLinkLei) && !isVeto) isAprovadoLei = true;
-
-         if (isAprovadoLei) macroStatus = 'Aprovados';
-         else if (isVeto) macroStatus = 'Vetados';
-         else if (sitLower.includes('arquivad') || sitLower.includes('rejeitad') || sitLower.includes('retirad') || sitLower.includes('concluíd') || sitLower.includes('encerrad')) macroStatus = 'Encerrados';
-         else macroStatus = 'Em Tramitação';
-      } else {
-         if (sitLower.includes('arquivad') || sitLower.includes('encerrad') || sitLower.includes('concluíd')) macroStatus = 'Arquivados';
-         else if (sitLower.includes('encaminhado') || ultMovLower.includes('encaminhado') || sitLower.includes('expedido') || ultMovLower.includes('expedido')) macroStatus = 'Encaminhados';
-         else if (sitLower.includes('aguardando') || ultMovLower.includes('aguardando') || sitLower.includes('diligência') || ultMovLower.includes('diligência')) macroStatus = 'Aguardando';
-         else macroStatus = 'Em Tramitação';
-      }
-
-      stats.macro[macroStatus] = (stats.macro[macroStatus] || 0) + 1;
-      
-      const tipo = getTipoProposicao(item);
-      stats.tipos[tipo] = (stats.tipos[tipo] || 0) + 1;
-    });
-
-    const generatedPieData = Object.entries(stats.tipos)
-      .sort((a, b) => b[1] - a[1]) 
-      .map(([name, value], index) => ({
-        name,
-        value,
-        color: PIE_COLORS[index % PIE_COLORS.length]
-      }));
-
-    return {
-      filteredData: filtered,
-      dashboardStats: stats,
-      pieData: generatedPieData,
-      filterOptions: {
-        tipo: Array.from(optTipo).sort(),
-        situacao: Array.from(optSituacao).sort(),
-        relator: Array.from(optRelator).sort(),
-        vista: Array.from(optVista).sort()
-      }
-    };
-  }, [data, activeTab, searchTerm, toggleAprovadas, toggleExcetoAprovadas, toggleUtilidade, filters]);
-
-  const handleSort = (key) => {
-    setSortConfig((prev) => {
-      if (prev.key === key) {
-        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
-      }
-      return { key, direction: 'desc' };
-    });
-  };
-
-  const sortedFilteredData = useMemo(() => {
-    if (!sortConfig.key) return filteredData;
-    
-    return [...filteredData].sort((a, b) => {
-      let aVal, bVal;
-      
-      if (sortConfig.key === 'numero') {
-        const getNum = (item) => {
-          const num = getNumero(item);
-          const match = num.match(/(\d+)\/(\d+)/);
-          return match ? parseInt(match[2]) * 10000 + parseInt(match[1]) : 0;
-        };
-        aVal = getNum(a);
-        bVal = getNum(b);
-        if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
-        if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
-        return 0;
-      } else if (sortConfig.key === 'movimento') {
-        const getDate = (item) => {
-          const ult = item['Último Movimento'] || item['Ultimo Movimento'] || '';
-          const match = ult.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-          return match ? new Date(`${match[3]}-${match[2]}-${match[1]}`).getTime() : 0;
-        };
-        aVal = getDate(a);
-        bVal = getDate(b);
-        if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
-        if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
-        return 0;
-      } else if (sortConfig.key === 'ementa') {
-        aVal = getEmenta(a) || '';
-        bVal = getEmenta(b) || '';
-        return sortConfig.direction === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
-      } else if (sortConfig.key === 'situacao') {
-        aVal = getSituacao(a) || '';
-        bVal = getSituacao(b) || '';
-        return sortConfig.direction === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
-      } else if (sortConfig.key === 'publicacao') {
-        const parseDate = (d) => {
-          if (!d || d === '-') return 0;
-          const parts = d.split('/');
-          if (parts.length === 3) return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`).getTime();
-          return 0;
-        };
-        aVal = parseDate(getDataPublicacaoPreLei(a));
-        bVal = parseDate(getDataPublicacaoPreLei(b));
-        if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
-        if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
-        return 0;
-      }
-      return 0;
-    });
-  }, [filteredData, sortConfig]);
-
-  const handleCheckboxChange = (category, value) => {
-    setFilters(prev => {
-      const current = prev[category];
-      const updated = current.includes(value) 
-        ? current.filter(item => item !== value)
-        : [...current, value];
-      return { ...prev, [category]: updated };
-    });
-  };
-
-  const extrairNumeroLei = (item) => {
-    try {
-      const rawLinks = getLinksAdicionais(item);
-      if (rawLinks && rawLinks !== '-') {
-         const parsed = JSON.parse(rawLinks);
-         const lei = parsed.find(l => l.numeroLei);
-         if (lei && lei.numeroLei) return lei.numeroLei;
-         
-         // Fallback extra para capturar diretamente no lado do React se os dados antigos tiverem a URL
-         const leiLink = parsed.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
-         if (leiLink && leiLink.url) {
-             const matchUrl = leiLink.url.match(/\/(\d+)_/);
-             if (matchUrl) return matchUrl[1];
-         }
-      }
-    } catch(e) {}
-
-    // Fallback caso não venha no link (tenta regex clássica nas outras colunas)
-    const sit = getSituacao(item) || '';
-    const ultMov = getUltimoMovimento(item) || '';
-    const obs = getObservacoes(item) || '';
-    const regex = /(?:Lei|Norma Jurídica)(?:\s*(?:n[º°o.]|número)?\s*)(\d+)/i;
-    
-    let match = sit.match(regex);
-    if (match && match[1]) return match[1].replace(/\./g, '');
-    match = ultMov.match(regex);
-    if (match && match[1]) return match[1].replace(/\./g, '');
-    match = obs.match(regex);
-    if (match && match[1]) return match[1].replace(/\./g, '');
-    return '';
-  };
-
+  // Exportação CSV enriquecida
   const exportToCSV = () => {
     if (sortedFilteredData.length === 0) {
-      showToast("Nenhum dado filtrado para exportar.");
+      showToast('Nenhum dado filtrado para exportar.');
       return;
     }
 
     const headers = [
-      'NÚMERO DO PL',
-      'SITUAÇÃO',
+      'NÚMERO DA PROPOSIÇÃO',
+      'TIPO',
+      'FASE / STATUS',
+      'SITUAÇÃO OFICIAL',
+      'SETOR ATUAL',
+      'RELATOR(A)',
+      'PEDIDO DE VISTA (COM QUEM)',
+      'AUTORIA / SUBSCRIÇÃO',
       'EMENTA',
-      'TEMA',
       'NÚMERO DA LEI APROVADA',
-      'DATA DA LEI APROVADA',
-      'LINK DA LEI APROVADA',
-      'OBSERVAÇÃO'
+      'DATA REDAÇÃO FINAL / LEI',
+      'LINK DA LEI',
+      'LINK ALESC',
+      'OBSERVAÇÕES INTERNAS',
     ];
 
     const escapeCSV = (str) => {
       if (str === null || str === undefined) return '""';
-      const stringified = String(str);
-      const escaped = stringified.replace(/"/g, '""');
-      return `"${escaped}"`;
+      return `"${String(str).replace(/"/g, '""')}"`;
     };
 
-    const rows = sortedFilteredData.map(item => {
-      let numProj = getNumero(item) || '';
-      let ementa = getEmenta(item) || '';
-      let obs = getObservacoes(item) || '';
-      let numLei = extrairNumeroLei(item) || '';
-      let dataLei = getDataPublicacaoPreLei(item) || '';
-      let linkDaLei = '';
-      
-      const sitLower = getSituacao(item).toLowerCase();
-      const ultMovLower = getUltimoMovimento(item).toLowerCase();
-      const obsLower = getObservacoes(item).toLowerCase();
-
-      let parsedLinks = [];
-      try {
-        const rawLinks = getLinksAdicionais(item);
-        if (rawLinks && rawLinks !== '-') parsedLinks = JSON.parse(rawLinks);
-      } catch(e) {}
-      
-      let isVeto = false;
-      let isAprovadoLei = false;
-
-      const temPalavraVeto = sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto');
-      const temLinkVeto = parsedLinks.some(l => l.label.toLowerCase().includes('veto'));
-      if (temPalavraVeto || temLinkVeto) isVeto = true;
-
-      const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica') || ultMovLower.includes('transformado em lei') || ultMovLower.includes('redação final');
-      const temLinkLei = parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
-      if ((temPalavraLei || temLinkLei) && !isVeto) isAprovadoLei = true;
-
-      if (isAprovadoLei) {
-        const leiLinkObj = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
-        if (leiLinkObj && leiLinkObj.url) linkDaLei = leiLinkObj.url;
-      }
-
-      let situacaoCsv = '';
-      if (isAprovadoLei) {
-          situacaoCsv = 'Aprovado';
-      } else if (isVeto) {
-          situacaoCsv = 'Vetado';
-      } else if (sitLower.includes('arquivad') || sitLower.includes('rejeitad') || sitLower.includes('retirad') || sitLower.includes('concluíd') || sitLower.includes('encerrad')) {
-          situacaoCsv = 'Parecer Contrário';
-      } else {
-          situacaoCsv = 'Em tramitação';
-      }
-
-      return [
-        escapeCSV(numProj),
-        escapeCSV(situacaoCsv),
-        escapeCSV(ementa),
-        '""', // TEMA (deixar em branco)
-        escapeCSV(numLei),
-        escapeCSV(dataLei),
-        escapeCSV(linkDaLei),
-        escapeCSV(obs)
-      ].join(',');
-    });
+    const rows = sortedFilteredData.map((item) => [
+      escapeCSV(item.numero),
+      escapeCSV(item.tipo),
+      escapeCSV(item.fasePrincipal),
+      escapeCSV(item.situacao),
+      escapeCSV(item.setor),
+      escapeCSV(item.relator),
+      escapeCSV(item.pedidoVista),
+      escapeCSV(item.autoria),
+      escapeCSV(item.ementa),
+      escapeCSV(item.numeroLei),
+      escapeCSV(item.dataRedacaoFinal),
+      escapeCSV(item.leiLink?.url || ''),
+      escapeCSV(item.link),
+      escapeCSV(item.observacoes),
+    ].join(','));
 
     const csvContent = [headers.join(','), ...rows].join('\n');
     const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", "exportacao_tabulum.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `tabulum_${activeTab}_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
-  const toggleMacroFilter = (macroName) => {
-     setFilters(prev => ({ ...prev, macro: prev.macro.includes(macroName) ? [] : [macroName] }));
+  // Estilo visual de cada card conforme o status Mondrian Suavizado
+  const getStatusTheme = (item) => {
+    if (item.isVeto) {
+      return {
+        accentBar: 'bg-[#c41e3a]',
+        badgeBg: 'bg-[#c41e3a] text-white',
+        boxBg: 'bg-[#c41e3a]/10 border-[#c41e3a] text-[#8b1328]',
+        label: 'PROJETO VETADO',
+      };
+    }
+    if (item.pedidoVista) {
+      return {
+        accentBar: 'bg-[#c41e3a]',
+        badgeBg: 'bg-[#c41e3a] text-white',
+        boxBg: 'bg-[#c41e3a]/10 border-[#c41e3a] text-[#8b1328]',
+        label: item.temVistaEmAberto ? 'PEDIDO DE VISTA EM ABERTO' : 'HISTÓRICO DE VISTA',
+      };
+    }
+    if (item.isVirouLei) {
+      return {
+        accentBar: 'bg-[#008080]',
+        badgeBg: 'bg-[#008080] text-white',
+        boxBg: 'bg-[#008080]/10 border-[#008080] text-[#004d4d]',
+        label: item.numeroLei ? `VIROU LEI Nº ${item.numeroLei}` : 'TRANSFORMADO EM LEI',
+      };
+    }
+    if (item.isAprovado || item.fasePrincipal === 'Encaminhado / Aprovado') {
+      return {
+        accentBar: 'bg-[#008080]',
+        badgeBg: 'bg-[#008080]/90 text-white',
+        boxBg: 'bg-[#008080]/10 border-[#008080] text-[#004d4d]',
+        label: 'APROVADO',
+      };
+    }
+    if (item.isEncerrado || item.fasePrincipal === 'Arquivado') {
+      return {
+        accentBar: 'bg-slate-400',
+        badgeBg: 'bg-slate-200 text-slate-700',
+        boxBg: 'bg-slate-100 border-slate-300 text-slate-700',
+        label: item.fasePrincipal.toUpperCase(),
+      };
+    }
+    return {
+      accentBar: 'bg-[#ffdb58]',
+      badgeBg: 'bg-[#ffdb58] text-slate-900',
+      boxBg: 'bg-[#ffdb58]/25 border-[#d4af37] text-slate-900',
+      label: item.fasePrincipal.toUpperCase(),
+    };
   };
-
-  const toggleTipoFilter = (tipoName) => {
-     setFilters(prev => ({ ...prev, tipo: prev.tipo.includes(tipoName) ? [] : [tipoName] }));
-  };
-
-  const limparFiltrosAvançados = () => {
-    setFilters({ tipo: [], situacao: [], relator: [], vista: [], macro: [] });
-  };
-
-  const barConfig = activeTab === 'processo' ? [
-    { key: 'Aprovados', label: 'APRO', color: 'bg-[#008080]' },
-    { key: 'Em Tramitação', label: 'TRAM', color: 'bg-[#ffdb58]' },
-    { key: 'Encerrados', label: 'ENCE', color: 'bg-gray-500' },
-    { key: 'Vetados', label: 'VETA', color: 'bg-[#c41e3a]' }
-  ] : [
-    { key: 'Aguardando', label: 'AGUA', color: 'bg-[#ffdb58]' },
-    { key: 'Encaminhados', label: 'ENCA', color: 'bg-[#008080]' },
-    { key: 'Arquivados', label: 'ARQU', color: 'bg-gray-500' },
-    { key: 'Em Tramitação', label: 'OUTR', color: 'bg-black' }
-  ];
-
-  const monitorLegislativoChars = "MONITOR LEGISLATIVO".split('');
 
   return (
-    <div className="min-h-screen bg-[#f8f9fa] text-black font-sans p-4 md:p-8 selection:bg-[#ffdb58] selection:text-black">
-      
-      <div className="max-w-7xl mx-auto mb-8">
-        <div className="border-[6px] border-black bg-white grid grid-cols-1 md:grid-cols-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-          <div className="md:col-span-3 p-6 md:p-10 border-b-[6px] md:border-b-0 md:border-r-[6px] border-black flex flex-row items-center gap-4 md:gap-8">
-            <div onClick={goToFrontPage} className="flex flex-row items-center gap-4 md:gap-8 cursor-pointer group">
-              <img 
-                src="https://raw.githubusercontent.com/killuixo/tabulum-sig-monilegis/refs/heads/main/icon-192.png" 
-                alt="Ícone Tabulum" 
-                className="w-28 h-28 md:w-36 md:h-36 object-contain drop-shadow-md flex-shrink-0 group-hover:scale-105 transition-transform duration-300"
+    <div className="min-h-screen bg-[#f5f4ef] text-slate-900 font-sans p-3 sm:p-6 md:p-8 selection:bg-[#ffdb58] selection:text-slate-900">
+      {/* ===============================================================
+          CABEÇALHO MONDRIAN EDITORIAL SUAVIZADO
+         =============================================================== */}
+      <header className="max-w-7xl mx-auto mb-6">
+        <div className="bg-white border-2 border-slate-900 rounded-2xl shadow-[4px_4px_0px_0px_#0f172a] overflow-hidden grid grid-cols-1 lg:grid-cols-12">
+          {/* Barra superior Mondrian tricolor */}
+          <div className="lg:col-span-12 h-2.5 flex border-b-2 border-slate-900">
+            <div className="w-1/2 bg-[#c41e3a] border-r-2 border-slate-900"></div>
+            <div className="w-1/3 bg-[#008080] border-r-2 border-slate-900"></div>
+            <div className="w-1/6 bg-[#ffdb58]"></div>
+          </div>
+
+          {/* Identidade Visual */}
+          <div className="lg:col-span-8 p-5 md:p-7 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b-2 lg:border-b-0 lg:border-r-2 border-slate-900">
+            <div
+              onClick={limparTodosFiltros}
+              className="flex items-center gap-4 md:gap-6 cursor-pointer group"
+              title="Voltar ao estado inicial"
+            >
+              <img
+                src="https://raw.githubusercontent.com/killuixo/tabulum-sig-monilegis/refs/heads/main/icon-192.png"
+                alt="Ícone Tabulum"
+                className="w-16 h-16 md:w-20 md:h-20 object-contain rounded-xl border-2 border-slate-900 bg-[#f5f4ef] p-1.5 shadow-[2px_2px_0px_0px_#0f172a] group-hover:scale-105 transition-transform"
               />
-              <div className="flex flex-col justify-center">
-                <h1 className="text-5xl md:text-7xl font-black uppercase tracking-tighter leading-none mb-0.5">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-widest bg-[#ffdb58] border border-slate-900 rounded">
+                    ALESC • e-Legis
+                  </span>
+                  <span className="text-xs font-bold text-slate-500">
+                    {enrichedData.length} registros sincronizados
+                  </span>
+                </div>
+                <h1 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight text-slate-900 leading-none mt-1">
                   TABULUM
                 </h1>
-                <div className="flex justify-between w-full text-gray-700 font-black uppercase text-[10px] md:text-[14.5px]">
-                  {monitorLegislativoChars.map((char, i) => (
-                    <span key={i}>{char === ' ' ? '\u00A0' : char}</span>
-                  ))}
-                </div>
+                <p className="text-xs md:text-sm font-bold uppercase tracking-[0.22em] text-slate-600 mt-1">
+                  Monitor Legislativo & Articuladores
+                </p>
               </div>
             </div>
-          </div>
-          <div className="flex flex-col md:col-span-1 bg-white">
-            <button 
-               onClick={(e) => { e.stopPropagation(); setActiveTab('processo'); limparFiltrosAvançados(); setSearchTerm('');}}
-               className={`flex-1 p-4 font-black uppercase text-sm md:text-base border-b-[6px] border-black transition-colors flex items-center justify-center gap-3 ${activeTab === 'processo' ? MONDRIAN_COLORS[0] + ' text-white' : 'hover:bg-gray-100 text-gray-400'}`}
+
+            <button
+              onClick={fetchData}
+              disabled={loading}
+              className="self-end sm:self-center px-3.5 py-2 rounded-lg border-2 border-slate-900 bg-white hover:bg-[#ffdb58]/40 text-xs font-extrabold uppercase tracking-wider flex items-center gap-2 shadow-[2px_2px_0px_0px_#0f172a] active:translate-y-0.5 transition-all"
+              title="Recarregar dados da planilha"
             >
-               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-               Processo Legislativo
+              <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                <path d="M3 3v5h5" />
+                <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+                <path d="M16 16h5v5" />
+              </svg>
+              Atualizar
             </button>
-            <button 
-               onClick={(e) => { e.stopPropagation(); setActiveTab('atividade'); limparFiltrosAvançados(); setSearchTerm('');}}
-               className={`flex-1 p-4 font-black uppercase text-sm md:text-base transition-colors flex items-center justify-center gap-3 ${activeTab === 'atividade' ? MONDRIAN_COLORS[1] + ' text-white' : 'hover:bg-gray-100 text-gray-400'}`}
+          </div>
+
+          {/* Seletor de Abas: Processo Legislativo vs Atividade Parlamentar */}
+          <div className="lg:col-span-4 grid grid-cols-2 lg:grid-cols-1">
+            <button
+              onClick={() => {
+                setActiveTab('processo');
+                limparTodosFiltros();
+              }}
+              className={`p-4 md:p-5 font-black uppercase text-xs sm:text-sm tracking-wider border-r-2 lg:border-r-0 lg:border-b-2 border-slate-900 flex items-center justify-between transition-colors ${
+                activeTab === 'processo'
+                  ? 'bg-[#c41e3a] text-white'
+                  : 'bg-white hover:bg-slate-100 text-slate-600'
+              }`}
             >
-               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
-               Atividade Parlamentar
+              <span className="flex items-center gap-3">
+                <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                </svg>
+                Processo Legislativo
+              </span>
+              <span className={`px-2.5 py-0.5 rounded-full text-xs font-black border ${
+                activeTab === 'processo' ? 'bg-white text-[#c41e3a] border-white' : 'bg-slate-100 text-slate-700 border-slate-300'
+              }`}>
+                {enrichedData.filter((i) => i.isProcesso).length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveTab('atividade');
+                limparTodosFiltros();
+              }}
+              className={`p-4 md:p-5 font-black uppercase text-xs sm:text-sm tracking-wider flex items-center justify-between transition-colors ${
+                activeTab === 'atividade'
+                  ? 'bg-[#008080] text-white'
+                  : 'bg-white hover:bg-slate-100 text-slate-600'
+              }`}
+            >
+              <span className="flex items-center gap-3">
+                <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                  <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="16" y1="13" x2="8" y2="13" />
+                  <line x1="16" y1="17" x2="8" y2="17" />
+                </svg>
+                Atividade Parlamentar
+              </span>
+              <span className={`px-2.5 py-0.5 rounded-full text-xs font-black border ${
+                activeTab === 'atividade' ? 'bg-white text-[#008080] border-white' : 'bg-slate-100 text-slate-700 border-slate-300'
+              }`}>
+                {enrichedData.filter((i) => !i.isProcesso).length}
+              </span>
             </button>
           </div>
         </div>
-      </div>
+      </header>
 
-      <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col lg:flex-row gap-6 mb-6">
-          
-          <div className="flex flex-col gap-3 lg:w-1/3">
-            <div className="flex gap-2 w-full">
-              <button 
-                onClick={() => {
-                  if (!toggleAprovadas) setFilters(prev => ({...prev, macro: []}));
-                  setToggleAprovadas(!toggleAprovadas);
-                  if (!toggleAprovadas) setToggleExcetoAprovadas(false);
-                }} 
-                className={`flex-1 px-3 py-4 border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 font-black uppercase text-[11px] transition-all flex items-center justify-center ${toggleAprovadas ? 'bg-[#008080] text-white' : 'bg-white text-black'}`}
-              >
-                <span>{toggleAprovadas ? '✓ APENAS LEIS' : 'APENAS LEIS'}</span>
-              </button>
-              <button 
-                onClick={() => {
-                  setToggleExcetoAprovadas(!toggleExcetoAprovadas);
-                  if (!toggleExcetoAprovadas) setToggleAprovadas(false);
-                }} 
-                className={`flex-1 px-3 py-4 border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 font-black uppercase text-[11px] transition-all flex items-center justify-center ${toggleExcetoAprovadas ? 'bg-[#c41e3a] text-white' : 'bg-white text-black'}`}
-              >
-                <span>{toggleExcetoAprovadas ? '✓ EXCETO LEIS' : 'EXCETO LEIS'}</span>
-              </button>
+      <main className="max-w-7xl mx-auto space-y-5">
+        {/* ===============================================================
+            PAINEL DE RESPOSTAS RÁPIDAS (KPIs CLICÁVEIS MULTI-SELEÇÃO)
+           =============================================================== */}
+        {activeTab === 'processo' ? (
+          <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            {/* Card 1: Total / Todos */}
+            <div
+              onClick={limparTodosFiltros}
+              className={`p-4 rounded-xl border-2 border-slate-900 cursor-pointer transition-all shadow-[3px_3px_0px_0px_#0f172a] hover:-translate-y-0.5 ${
+                totalActiveFilters === 0 ? 'bg-slate-900 text-white' : 'bg-white text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex justify-between items-center">
+                <span className="text-[11px] font-extrabold uppercase tracking-wider opacity-80">Exibindo</span>
+                <span className="w-2.5 h-2.5 rounded-full bg-[#ffdb58]"></span>
+              </div>
+              <p className="text-3xl font-black mt-1">{stats.total}</p>
+              <p className="text-[11px] font-bold opacity-75 mt-0.5">de {tabData.length} processos</p>
             </div>
-            <button 
-              onClick={() => setToggleUtilidade(!toggleUtilidade)} 
-              className={`px-4 py-4 border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 font-black uppercase text-sm transition-all flex items-center justify-between ${toggleUtilidade ? 'bg-[#ffdb58] text-black' : 'bg-white text-black'}`}
+
+            {/* Card 2: Em Tramitação */}
+            <div
+              onClick={() => toggleFilterValue('status', 'Em Tramitação')}
+              className={`p-4 rounded-xl border-2 border-slate-900 cursor-pointer transition-all shadow-[3px_3px_0px_0px_#0f172a] hover:-translate-y-0.5 ${
+                filters.status.includes('Em Tramitação')
+                  ? 'bg-[#ffdb58] text-slate-900 ring-2 ring-slate-900 ring-offset-2'
+                  : 'bg-white hover:bg-[#ffdb58]/25'
+              }`}
             >
-              <span>{toggleUtilidade ? '✓ Utilidade Pública' : 'Utilidade Pública'}</span>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-            </button>
-            <button 
-              onClick={() => setShowFilters(!showFilters)} 
-              className={`px-4 py-4 border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 font-black uppercase text-sm transition-all flex items-center justify-between ${showFilters ? 'bg-black text-white' : 'bg-gray-200 text-black'}`}
+              <div className="flex justify-between items-center">
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700">Tramitando</span>
+                <span className="w-3 h-3 rounded-sm bg-[#ffdb58] border border-slate-900"></span>
+              </div>
+              <p className="text-3xl font-black mt-1 text-slate-900">{stats.tramitando}</p>
+              <p className="text-[11px] font-bold text-slate-600 mt-0.5">Em curso nas comissões</p>
+            </div>
+
+            {/* Card 3: Com Pedido de Vista */}
+            <div
+              onClick={() => toggleFilterValue('status', 'Com Pedido de Vista')}
+              className={`p-4 rounded-xl border-2 border-slate-900 cursor-pointer transition-all shadow-[3px_3px_0px_0px_#0f172a] hover:-translate-y-0.5 ${
+                filters.status.includes('Com Pedido de Vista')
+                  ? 'bg-[#c41e3a] text-white ring-2 ring-slate-900 ring-offset-2'
+                  : 'bg-white hover:bg-[#c41e3a]/10'
+              }`}
             >
-              <span>Filtros Avançados</span>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
-            </button>
+              <div className="flex justify-between items-center">
+                <span className={`text-[11px] font-extrabold uppercase tracking-wider ${filters.status.includes('Com Pedido de Vista') ? 'text-white' : 'text-[#c41e3a]'}`}>
+                  Pedidos de Vista
+                </span>
+                <span className="w-3 h-3 rounded-sm bg-[#c41e3a] border border-slate-900"></span>
+              </div>
+              <p className="text-3xl font-black mt-1">{stats.comVista}</p>
+              <p className={`text-[11px] font-bold mt-0.5 ${filters.status.includes('Com Pedido de Vista') ? 'text-white/90' : 'text-slate-600'}`}>
+                {stats.comVistaAberta} em aberto agora
+              </p>
+            </div>
+
+            {/* Card 4: Aprovados (Geral / Redação Final) */}
+            <div
+              onClick={() => toggleFilterValue('status', 'Aprovado')}
+              className={`p-4 rounded-xl border-2 border-slate-900 cursor-pointer transition-all shadow-[3px_3px_0px_0px_#0f172a] hover:-translate-y-0.5 ${
+                filters.status.includes('Aprovado')
+                  ? 'bg-[#008080] text-white ring-2 ring-slate-900 ring-offset-2'
+                  : 'bg-white hover:bg-[#008080]/10'
+              }`}
+            >
+              <div className="flex justify-between items-center">
+                <span className={`text-[11px] font-extrabold uppercase tracking-wider ${filters.status.includes('Aprovado') ? 'text-white' : 'text-[#008080]'}`}>
+                  Aprovados
+                </span>
+                <span className="w-3 h-3 rounded-sm bg-[#008080] border border-slate-900"></span>
+              </div>
+              <p className="text-3xl font-black mt-1">{stats.aprovadosTotal}</p>
+              <p className={`text-[11px] font-bold mt-0.5 ${filters.status.includes('Aprovado') ? 'text-white/90' : 'text-slate-600'}`}>
+                Plenário + Leis
+              </p>
+            </div>
+
+            {/* Card 5: Viraram Lei */}
+            <div
+              onClick={() => toggleFilterValue('status', 'Virou Lei')}
+              className={`p-4 rounded-xl border-2 border-slate-900 cursor-pointer transition-all shadow-[3px_3px_0px_0px_#0f172a] hover:-translate-y-0.5 ${
+                filters.status.includes('Virou Lei')
+                  ? 'bg-[#008080] text-[#ffdb58] ring-2 ring-slate-900 ring-offset-2'
+                  : 'bg-white hover:bg-[#008080]/15'
+              }`}
+            >
+              <div className="flex justify-between items-center">
+                <span className={`text-[11px] font-extrabold uppercase tracking-wider ${filters.status.includes('Virou Lei') ? 'text-[#ffdb58]' : 'text-[#008080]'}`}>
+                  Viraram Lei
+                </span>
+                <span className="px-1.5 py-0.2 text-[9px] font-black uppercase bg-[#ffdb58] text-slate-900 border border-slate-900 rounded">
+                  LEI
+                </span>
+              </div>
+              <p className="text-3xl font-black mt-1">{stats.virouLei}</p>
+              <p className={`text-[11px] font-bold mt-0.5 ${filters.status.includes('Virou Lei') ? 'text-white' : 'text-slate-600'}`}>
+                Sancionadas / Promulgadas
+              </p>
+            </div>
+
+            {/* Card 6: Vetados / Encerrados */}
+            <div
+              onClick={() => toggleFilterValue('status', 'Vetado')}
+              className={`p-4 rounded-xl border-2 border-slate-900 cursor-pointer transition-all shadow-[3px_3px_0px_0px_#0f172a] hover:-translate-y-0.5 ${
+                filters.status.includes('Vetado')
+                  ? 'bg-[#c41e3a] text-white ring-2 ring-slate-900 ring-offset-2'
+                  : 'bg-white hover:bg-slate-100'
+              }`}
+            >
+              <div className="flex justify-between items-center">
+                <span className="text-[11px] font-extrabold uppercase tracking-wider">Vetados</span>
+                <span className="text-[10px] font-bold opacity-75">Arq: {stats.encerrados}</span>
+              </div>
+              <p className="text-3xl font-black mt-1">{stats.vetados}</p>
+              <p
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleFilterValue('status', 'Encerrado');
+                }}
+                className="text-[11px] font-extrabold underline mt-0.5 hover:text-[#c41e3a]"
+              >
+                Filtrar Encerrados ({stats.encerrados})
+              </p>
+            </div>
+          </section>
+        ) : (
+          <section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div
+              onClick={limparTodosFiltros}
+              className={`p-4 rounded-xl border-2 border-slate-900 cursor-pointer transition-all shadow-[3px_3px_0px_0px_#0f172a] ${
+                totalActiveFilters === 0 ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'
+              }`}
+            >
+              <span className="text-[11px] font-extrabold uppercase tracking-wider opacity-80">Total Atividades</span>
+              <p className="text-3xl font-black mt-1">{stats.total}</p>
+            </div>
+            <div
+              onClick={() => toggleFilterValue('status', 'Aguardando Resposta')}
+              className={`p-4 rounded-xl border-2 border-slate-900 cursor-pointer transition-all shadow-[3px_3px_0px_0px_#0f172a] ${
+                filters.status.includes('Aguardando Resposta') ? 'bg-[#ffdb58] text-slate-900' : 'bg-white hover:bg-[#ffdb58]/20'
+              }`}
+            >
+              <span className="text-[11px] font-extrabold uppercase tracking-wider">Aguardando / Diligência</span>
+              <p className="text-3xl font-black mt-1">{stats.aguardando}</p>
+            </div>
+            <div
+              onClick={() => toggleFilterValue('status', 'Encaminhado / Aprovado')}
+              className={`p-4 rounded-xl border-2 border-slate-900 cursor-pointer transition-all shadow-[3px_3px_0px_0px_#0f172a] ${
+                filters.status.includes('Encaminhado / Aprovado') ? 'bg-[#008080] text-white' : 'bg-white hover:bg-[#008080]/15'
+              }`}
+            >
+              <span className="text-[11px] font-extrabold uppercase tracking-wider">Encaminhados / Expedidos</span>
+              <p className="text-3xl font-black mt-1">{stats.encaminhados}</p>
+            </div>
+            <div
+              onClick={() => toggleFilterValue('status', 'Arquivado')}
+              className={`p-4 rounded-xl border-2 border-slate-900 cursor-pointer transition-all shadow-[3px_3px_0px_0px_#0f172a] ${
+                filters.status.includes('Arquivado') ? 'bg-slate-700 text-white' : 'bg-white hover:bg-slate-100'
+              }`}
+            >
+              <span className="text-[11px] font-extrabold uppercase tracking-wider">Arquivados / Concluídos</span>
+              <p className="text-3xl font-black mt-1">{stats.arquivados}</p>
+            </div>
+          </section>
+        )}
+
+        {/* ===============================================================
+            DESTAQUE DE PEDIDOS DE VISTA ("COM QUEM ESTÁ?") + VISÃO POR TIPO
+           =============================================================== */}
+        <section className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          {/* Painel Rápido: Pedidos de Vista e Com Quem Está */}
+          <div className="lg:col-span-7 bg-white border-2 border-slate-900 rounded-xl p-4 shadow-[3px_3px_0px_0px_#0f172a] flex flex-col justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3 mb-3">
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-sm bg-[#c41e3a] border border-slate-900"></span>
+                <h3 className="font-black text-xs sm:text-sm uppercase tracking-wider text-slate-900">
+                  Pedidos de Vista — Com quem está?
+                </h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setOnlyOpenVista(!onlyOpenVista)}
+                  className={`px-2.5 py-1 rounded-md border text-[11px] font-extrabold uppercase transition-colors ${
+                    onlyOpenVista
+                      ? 'bg-[#c41e3a] text-white border-slate-900'
+                      : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
+                  }`}
+                >
+                  {onlyOpenVista ? '✓ Apenas Vista em Aberto' : 'Filtrar Vista em Aberto'}
+                </button>
+                <button
+                  onClick={() => setToggleUtilidade(!toggleUtilidade)}
+                  className={`px-2.5 py-1 rounded-md border text-[11px] font-extrabold uppercase transition-colors ${
+                    toggleUtilidade
+                      ? 'bg-[#ffdb58] text-slate-900 border-slate-900'
+                      : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
+                  }`}
+                >
+                  {toggleUtilidade ? '✓ Utilidade Pública' : 'Utilidade Pública'}
+                </button>
+              </div>
+            </div>
+
+            {vistaBreakdown.length > 0 ? (
+              <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto pr-1">
+                {vistaBreakdown.map(([deputado, qtd]) => {
+                  const active = filters.vistaDeputado.includes(deputado);
+                  return (
+                    <button
+                      key={deputado}
+                      onClick={() => toggleFilterValue('vistaDeputado', deputado)}
+                      className={`px-3 py-1.5 rounded-lg border-2 text-xs font-extrabold flex items-center gap-2 transition-all ${
+                        active
+                          ? 'bg-[#c41e3a] text-white border-slate-900 shadow-[2px_2px_0px_0px_#0f172a]'
+                          : 'bg-[#f5f4ef] text-slate-800 border-slate-300 hover:border-slate-900'
+                      }`}
+                    >
+                      <span className="truncate max-w-[180px]">{deputado}</span>
+                      <span className={`px-1.5 py-0.2 rounded text-[10px] font-black ${
+                        active ? 'bg-white text-[#c41e3a]' : 'bg-[#c41e3a]/15 text-[#c41e3a]'
+                      }`}>
+                        {qtd}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-xs font-bold text-slate-400 italic py-2">
+                Nenhum pedido de vista registrado nas proposições exibidas no momento.
+              </p>
+            )}
           </div>
 
-          <div className="flex-1 border-[4px] border-black p-4 md:p-6 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white flex flex-col sm:flex-row gap-6 items-start">
-            
-            <div className="flex-1 flex flex-col gap-5 w-full">
-              <div className="flex justify-start items-center gap-3">
-                <h3 className="font-black text-lg md:text-xl uppercase tracking-wider m-0 leading-none">Visão Geral</h3>
-                <span className="bg-black text-white px-3 py-1 text-xl font-black leading-none">{dashboardStats.total}</span>
-              </div>
-              
-              <div className="flex flex-wrap gap-x-4 gap-y-3">
-                {pieData.map((slice) => (
-                  <div key={slice.name} onClick={() => toggleTipoFilter(slice.name)} className={`flex items-center gap-2 cursor-pointer transition-opacity hover:opacity-70 ${filters.tipo.includes(slice.name) ? 'ring-2 ring-offset-2 ring-black rounded-sm' : ''}`}>
-                    <span className="w-3 h-3 border-[1px] border-black" style={{backgroundColor: slice.color}}></span>
-                    <span className="text-[11px] font-bold uppercase text-gray-800">{slice.name}: <strong className="text-black">{slice.value}</strong></span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="space-y-1">
-                <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-gray-500">
-                  {barConfig.map(b => (
-                     <span key={b.key} onClick={() => toggleMacroFilter(b.key)} className={`cursor-pointer transition-colors hover:text-black ${filters.macro.includes(b.key) ? 'text-black border-b-[2px] border-black' : ''}`} title={`${b.key}: ${dashboardStats.macro[b.key] || 0}`}>
-                        {b.label} {dashboardStats.macro[b.key] || 0}
-                     </span>
-                  ))}
-                </div>
-                <div className="w-full h-4 flex bg-gray-200 border-[2px] border-black overflow-hidden">
-                  {barConfig.map(b => {
-                     const val = dashboardStats.macro[b.key] || 0;
-                     const pct = (val / dashboardStats.total) * 100 || 0;
-                     if (pct === 0) return null;
-                     return <div key={b.key} onClick={() => toggleMacroFilter(b.key)} className={`h-full ${b.color} cursor-pointer hover:brightness-110 border-r-[2px] border-black last:border-r-0`} style={{width: `${pct}%`}} title={`${b.key}: ${val}`}></div>
-                  })}
-                </div>
+          {/* Distribuição por Tipo de Proposição + Gráfico Mondrian */}
+          <div className="lg:col-span-5 bg-white border-2 border-slate-900 rounded-xl p-4 shadow-[3px_3px_0px_0px_#0f172a] flex items-center justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <h3 className="font-black text-xs sm:text-sm uppercase tracking-wider text-slate-900 mb-2.5 flex items-center gap-2">
+                <span className="w-3 h-3 rounded-sm bg-[#008080] border border-slate-900"></span>
+                Tipos de Proposição (Multiseleção)
+              </h3>
+              <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1">
+                {pieData.map((slice) => {
+                  const selected = filters.tipo.includes(slice.name);
+                  return (
+                    <button
+                      key={slice.name}
+                      onClick={() => toggleFilterValue('tipo', slice.name)}
+                      className={`px-2.5 py-1 rounded-md border text-[11px] font-extrabold uppercase flex items-center gap-1.5 transition-all ${
+                        selected
+                          ? 'bg-slate-900 text-white border-slate-900'
+                          : 'bg-slate-50 text-slate-800 border-slate-300 hover:border-slate-900'
+                      }`}
+                    >
+                      <span className="w-2.5 h-2.5 rounded-sm border border-slate-900" style={{ backgroundColor: slice.color }}></span>
+                      <span>{slice.name}:</span>
+                      <strong>{slice.value}</strong>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            {pieData && pieData.length > 0 && (
-              <div className="flex justify-center items-start self-start">
-                <div className="w-24 h-24 md:w-32 md:h-32 flex-shrink-0 rounded-full border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white overflow-hidden">
-                  <svg viewBox="0 0 32 32" className="w-full h-full transform -rotate-90">
-                    {(() => {
-                      let cumulativePercent = 0;
-                      const total = pieData.reduce((acc, curr) => acc + curr.value, 0);
-                      return pieData.map((slice) => {
-                        if (slice.value === 0) return null;
-                        const percent = slice.value / total;
-                        
-                        const startAngle = cumulativePercent * 360;
-                        const endAngle = (cumulativePercent + percent) * 360;
-                        cumulativePercent += percent;
+            {pieData.length > 0 && (
+              <div className="w-20 h-20 sm:w-24 sm:h-24 flex-shrink-0 rounded-full border-2 border-slate-900 shadow-[2px_2px_0px_0px_#0f172a] overflow-hidden bg-white">
+                <svg viewBox="0 0 32 32" className="w-full h-full -rotate-90">
+                  {(() => {
+                    let cumulative = 0;
+                    const total = pieData.reduce((acc, c) => acc + c.value, 0) || 1;
+                    return pieData.map((slice) => {
+                      if (slice.value === 0) return null;
+                      const pct = slice.value / total;
+                      const startAngle = cumulative * 360;
+                      const endAngle = (cumulative + pct) * 360;
+                      cumulative += pct;
 
-                        const startRad = (startAngle * Math.PI) / 180;
-                        const endRad = (endAngle * Math.PI) / 180;
-                        
-                        const cx = 16, cy = 16, r = 16;
-                        const x1 = cx + r * Math.cos(startRad);
-                        const y1 = cy + r * Math.sin(startRad);
-                        const x2 = cx + r * Math.cos(endRad);
-                        const y2 = cy + r * Math.sin(endRad);
+                      const startRad = (startAngle * Math.PI) / 180;
+                      const endRad = (endAngle * Math.PI) / 180;
+                      const cx = 16, cy = 16, r = 16;
+                      const x1 = cx + r * Math.cos(startRad);
+                      const y1 = cy + r * Math.sin(startRad);
+                      const x2 = cx + r * Math.cos(endRad);
+                      const y2 = cy + r * Math.sin(endRad);
+                      const largeArc = pct > 0.5 ? 1 : 0;
 
-                        const largeArc = percent > 0.5 ? 1 : 0;
-
-                        const pathData = percent === 1 
+                      const d =
+                        pct >= 0.999
                           ? `M ${cx} 0 A ${r} ${r} 0 1 1 ${cx} 32 A ${r} ${r} 0 1 1 ${cx} 0 Z`
                           : `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
 
-                        return (
-                          <path
-                            key={slice.name}
-                            d={pathData}
-                            fill={slice.color}
-                            onClick={() => toggleTipoFilter(slice.name)}
-                            className={`cursor-pointer hover:opacity-80 transition-opacity ${filters.tipo.includes(slice.name) ? 'opacity-100 stroke-black stroke-[1px]' : 'opacity-90'}`}
-                          >
-                            <title>{slice.name}: {slice.value}</title>
-                          </path>
-                        );
-                      });
-                    })()}
-                  </svg>
-                </div>
+                      return (
+                        <path
+                          key={slice.name}
+                          d={d}
+                          fill={slice.color}
+                          onClick={() => toggleFilterValue('tipo', slice.name)}
+                          className="cursor-pointer hover:opacity-80 transition-opacity"
+                        >
+                          <title>{`${slice.name}: ${slice.value}`}</title>
+                        </path>
+                      );
+                    });
+                  })()}
+                </svg>
               </div>
             )}
           </div>
-        </div>
+        </section>
 
-        {showFilters && (
-          <div className="mb-6 p-6 border-[4px] border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-            <div className="flex justify-between items-center mb-4 border-b-[3px] border-black pb-2">
-              <h3 className="font-black text-lg uppercase flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
-                Filtros Múltiplos
-              </h3>
-              <button onClick={limparFiltrosAvançados} className="text-xs font-black uppercase underline hover:text-[#c41e3a]">Limpar Caixas</button>
+        {/* ===============================================================
+            BARRA DE BUSCA UNIVERSAL + BOTÃO DE FILTROS MULTISELEÇÃO + EXPORTAR
+           =============================================================== */}
+        <section className="flex flex-col md:flex-row gap-3">
+          {/* Busca Universal */}
+          <div className="flex-1 flex items-center bg-white border-2 border-slate-900 rounded-xl shadow-[3px_3px_0px_0px_#0f172a] overflow-hidden focus-within:ring-2 focus-within:ring-[#008080]">
+            <div className={`w-3 self-stretch border-r-2 border-slate-900 ${activeTab === 'processo' ? 'bg-[#c41e3a]' : 'bg-[#008080]'}`}></div>
+            <div className="px-3.5 text-slate-500">
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
             </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <div className="flex flex-col gap-2">
-                <p className="text-xs font-black uppercase text-gray-500 tracking-wider">Tipo</p>
-                <div className="max-h-40 overflow-y-auto pr-2 custom-scrollbar flex flex-col gap-1.5">
-                  {filterOptions.tipo.map(opt => (
-                    <label key={opt} className="flex items-start gap-2 cursor-pointer group">
-                      <input type="checkbox" className="mt-0.5 w-4 h-4 accent-black border-2 border-black" checked={filters.tipo.includes(opt)} onChange={() => handleCheckboxChange('tipo', opt)} />
-                      <span className="text-sm font-bold text-gray-700 group-hover:text-black">{opt}</span>
-                    </label>
-                  ))}
-                </div>
+            <input
+              type="text"
+              placeholder="Busca universal: nº da proposição, ementa, relator, quem pediu vista, nº da lei, autor..."
+              className="w-full py-3.5 pr-4 text-sm sm:text-base font-bold text-slate-900 placeholder-slate-400 outline-none bg-transparent"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="px-3 text-xs font-black uppercase text-slate-400 hover:text-[#c41e3a]"
+              >
+                Limpar
+              </button>
+            )}
+          </div>
+
+          {/* Botões de Ação */}
+          <div className="flex flex-wrap sm:flex-nowrap gap-2">
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={`px-4 py-3 rounded-xl border-2 border-slate-900 font-black uppercase text-xs tracking-wider flex items-center gap-2 shadow-[3px_3px_0px_0px_#0f172a] transition-all ${
+                showFilters || totalActiveFilters > 0
+                  ? 'bg-[#ffdb58] text-slate-900'
+                  : 'bg-white text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+              </svg>
+              <span>Filtros Universais</span>
+              {totalActiveFilters > 0 && (
+                <span className="px-2 py-0.5 rounded-full bg-slate-900 text-white text-[10px]">
+                  {totalActiveFilters}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={exportToCSV}
+              className="px-4 py-3 rounded-xl border-2 border-slate-900 bg-white hover:bg-[#008080] hover:text-white font-black uppercase text-xs tracking-wider flex items-center gap-2 shadow-[3px_3px_0px_0px_#0f172a] transition-colors"
+              title="Exportar seleção atual para planilha CSV"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" x2="12" y1="15" y2="3" />
+              </svg>
+              <span className="hidden sm:inline">Exportar CSV</span>
+            </button>
+
+            <div className="flex rounded-xl border-2 border-slate-900 bg-white shadow-[3px_3px_0px_0px_#0f172a] overflow-hidden">
+              <button
+                onClick={() => setViewMode('card')}
+                className={`px-3.5 py-3 font-black uppercase text-xs flex items-center gap-1.5 transition-colors ${
+                  viewMode === 'card' ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-700'
+                }`}
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                  <rect width="7" height="9" x="3" y="3" rx="1" />
+                  <rect width="7" height="5" x="14" y="3" rx="1" />
+                  <rect width="7" height="9" x="14" y="12" rx="1" />
+                  <rect width="7" height="5" x="3" y="16" rx="1" />
+                </svg>
+                Cards
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`px-3.5 py-3 font-black uppercase text-xs flex items-center gap-1.5 border-l-2 border-slate-900 transition-colors ${
+                  viewMode === 'list' ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-700'
+                }`}
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                  <line x1="8" x2="21" y1="6" y2="6" />
+                  <line x1="8" x2="21" y1="12" y2="12" />
+                  <line x1="8" x2="21" y1="18" y2="18" />
+                  <line x1="3" x2="3.01" y1="6" y2="6" />
+                  <line x1="3" x2="3.01" y1="12" y2="12" />
+                  <line x1="3" x2="3.01" y1="18" y2="18" />
+                </svg>
+                Lista
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* ===============================================================
+            CHIPS (PÍLULAS) DE FILTROS ATIVOS
+           =============================================================== */}
+        {totalActiveFilters > 0 && (
+          <section className="flex flex-wrap items-center gap-2 bg-white/80 border border-slate-300 rounded-xl px-4 py-2.5">
+            <span className="text-[11px] font-black uppercase tracking-wider text-slate-500 mr-1">
+              Filtros Ativos:
+            </span>
+
+            {onlyOpenVista && (
+              <span className="px-2.5 py-1 rounded-full bg-[#c41e3a] text-white text-xs font-bold flex items-center gap-1.5">
+                Vista em Aberto
+                <button onClick={() => setOnlyOpenVista(false)} className="hover:opacity-75">✕</button>
+              </span>
+            )}
+
+            {toggleUtilidade && (
+              <span className="px-2.5 py-1 rounded-full bg-[#ffdb58] text-slate-900 border border-slate-900 text-xs font-bold flex items-center gap-1.5">
+                Utilidade Pública
+                <button onClick={() => setToggleUtilidade(false)} className="hover:opacity-75">✕</button>
+              </span>
+            )}
+
+            {Object.entries(filters).map(([category, values]) =>
+              values.map((val) => (
+                <span
+                  key={`${category}-${val}`}
+                  className="px-2.5 py-1 rounded-full bg-slate-900 text-white text-xs font-bold flex items-center gap-1.5"
+                >
+                  <span className="opacity-70 uppercase text-[10px]">{category}:</span> {val}
+                  <button
+                    onClick={() => toggleFilterValue(category, val)}
+                    className="hover:text-[#ffdb58] font-black"
+                  >
+                    ✕
+                  </button>
+                </span>
+              ))
+            )}
+
+            <button
+              onClick={limparTodosFiltros}
+              className="ml-auto text-xs font-black uppercase underline text-[#c41e3a] hover:opacity-80"
+            >
+              Limpar Todos
+            </button>
+          </section>
+        )}
+
+        {/* ===============================================================
+            PAINEL EXPANSÍVEL DE MULTISELEÇÃO UNIVERSAL (8 DIMENSÕES)
+           =============================================================== */}
+        {showFilters && (
+          <section className="bg-white border-2 border-slate-900 rounded-2xl p-5 shadow-[4px_4px_0px_0px_#0f172a]">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-4 border-b-2 border-slate-900">
+              <div>
+                <h3 className="font-black text-base uppercase tracking-wider flex items-center gap-2">
+                  <span className="w-3 h-3 bg-[#c41e3a] border border-slate-900 inline-block"></span>
+                  Filtros de Multiseleção Universal
+                </h3>
+                <p className="text-xs font-bold text-slate-500">
+                  Combine quantos critérios quiser (Fase, Quem pediu Vista, Comissão, Relator, Autoria, Tipo e Ano).
+                </p>
               </div>
-              <div className="flex flex-col gap-2">
-                <p className="text-xs font-black uppercase text-gray-500 tracking-wider">Situação</p>
-                <div className="max-h-40 overflow-y-auto pr-2 custom-scrollbar flex flex-col gap-1.5">
-                  {filterOptions.situacao.map(opt => (
-                    <label key={opt} className="flex items-start gap-2 cursor-pointer group">
-                      <input type="checkbox" className="mt-0.5 w-4 h-4 accent-black border-2 border-black" checked={filters.situacao.includes(opt)} onChange={() => handleCheckboxChange('situacao', opt)} />
-                      <span className="text-sm font-bold text-gray-700 group-hover:text-black leading-tight">{opt}</span>
-                    </label>
-                  ))}
-                </div>
+
+              <div className="flex items-center gap-3">
+                <input
+                  type="text"
+                  placeholder="Filtrar opções abaixo..."
+                  value={filterSearch}
+                  onChange={(e) => setFilterSearch(e.target.value)}
+                  className="px-3 py-1.5 text-xs font-bold border-2 border-slate-900 rounded-lg bg-[#f5f4ef] outline-none"
+                />
+                <button
+                  onClick={limparTodosFiltros}
+                  className="px-3 py-1.5 rounded-lg border-2 border-slate-900 bg-[#c41e3a] text-white text-xs font-black uppercase"
+                >
+                  Resetar Tudo
+                </button>
               </div>
-              <div className="flex flex-col gap-2">
-                <p className="text-xs font-black uppercase text-gray-500 tracking-wider">Relator(a)</p>
-                <div className="max-h-40 overflow-y-auto pr-2 custom-scrollbar flex flex-col gap-1.5">
-                  {filterOptions.relator.map(opt => (
-                    <label key={opt} className="flex items-start gap-2 cursor-pointer group">
-                      <input type="checkbox" className="mt-0.5 w-4 h-4 accent-black border-2 border-black" checked={filters.relator.includes(opt)} onChange={() => handleCheckboxChange('relator', opt)} />
-                      <span className="text-sm font-bold text-gray-700 group-hover:text-black uppercase">{opt}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <div className="flex flex-col gap-2">
-                <p className="text-xs font-black uppercase text-gray-500 tracking-wider">Pedido de Vista</p>
-                <div className="max-h-40 overflow-y-auto pr-2 custom-scrollbar flex flex-col gap-1.5">
-                  {filterOptions.vista.map(opt => (
-                    <label key={opt} className="flex items-start gap-2 cursor-pointer group">
-                      <input type="checkbox" className="mt-0.5 w-4 h-4 accent-black border-2 border-black" checked={filters.vista.includes(opt)} onChange={() => handleCheckboxChange('vista', opt)} />
-                      <span className="text-sm font-bold text-gray-700 group-hover:text-black uppercase">{opt}</span>
-                    </label>
-                  ))}
-                  {filterOptions.vista.length === 0 && <span className="text-xs italic text-gray-400">Nenhum em aberto.</span>}
-                </div>
-              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+              {[
+                { key: 'status', title: '1. Fase / Status', color: 'border-[#008080]' },
+                { key: 'vistaDeputado', title: '2. Vista (Com Quem)', color: 'border-[#c41e3a]' },
+                { key: 'setor', title: '3. Setor / Comissão Atual', color: 'border-[#ffdb58]' },
+                { key: 'relator', title: '4. Relator(a) na Comissão', color: 'border-[#008080]' },
+                { key: 'situacao', title: '5. Situação Oficial', color: 'border-slate-900' },
+                { key: 'autoria', title: '6. Autoria / Subscrição', color: 'border-[#c41e3a]' },
+                { key: 'tipo', title: '7. Tipo de Proposição', color: 'border-[#ffdb58]' },
+                { key: 'ano', title: '8. Ano da Proposição', color: 'border-slate-900' },
+              ].map((col) => {
+                const options = (filterOptions[col.key] || []).filter((o) =>
+                  !filterSearch.trim() || o.label.toLowerCase().includes(filterSearch.toLowerCase().trim())
+                );
+                const selectedCount = (filters[col.key] || []).length;
+
+                return (
+                  <div key={col.key} className={`border-t-4 ${col.color} bg-[#f5f4ef]/60 rounded-lg p-3 border border-slate-200`}>
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-xs font-black uppercase tracking-wider text-slate-800">
+                        {col.title}
+                      </span>
+                      {selectedCount > 0 && (
+                        <button
+                          onClick={() => clearCategory(col.key)}
+                          className="text-[10px] font-extrabold text-[#c41e3a] underline"
+                        >
+                          Limpar ({selectedCount})
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="max-h-44 overflow-y-auto space-y-1 pr-1">
+                      {options.length > 0 ? (
+                        options.map((opt) => {
+                          const checked = filters[col.key].includes(opt.label);
+                          return (
+                            <label
+                              key={opt.label}
+                              className={`flex items-center justify-between gap-2 px-2 py-1 rounded cursor-pointer text-xs font-bold transition-colors ${
+                                checked ? 'bg-slate-900 text-white' : 'hover:bg-white text-slate-700'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => toggleFilterValue(col.key, opt.label)}
+                                  className="w-3.5 h-3.5 accent-[#008080] rounded flex-shrink-0"
+                                />
+                                <span className="truncate" title={opt.label}>
+                                  {opt.label}
+                                </span>
+                              </div>
+                              <span className={`text-[10px] px-1.5 py-0.2 rounded font-extrabold flex-shrink-0 ${
+                                checked ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
+                              }`}>
+                                {opt.count}
+                              </span>
+                            </label>
+                          );
+                        })
+                      ) : (
+                        <p className="text-[11px] italic text-slate-400 py-2">Nenhuma opção disponível.</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* ===============================================================
+            BARRA DE ORDENAÇÃO RÁPIDA
+           =============================================================== */}
+        {!loading && !error && sortedFilteredData.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-2 bg-white border-2 border-slate-900 rounded-xl px-4 py-2.5 shadow-[2px_2px_0px_0px_#0f172a]">
+            <span className="text-[11px] font-black uppercase tracking-wider text-slate-500">
+              Ordenar por:
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { key: 'movimento', label: 'Último Movimento' },
+                { key: 'numero', label: 'Nº da Proposição' },
+                { key: 'situacao', label: 'Situação' },
+                { key: 'ementa', label: 'Ementa (A-Z)' },
+                ...(activeTab === 'processo' ? [{ key: 'publicacao', label: 'Data Redação Final / Lei' }] : []),
+              ].map((s) => {
+                const active = sortConfig.key === s.key;
+                return (
+                  <button
+                    key={s.key}
+                    onClick={() => handleSort(s.key)}
+                    className={`px-2.5 py-1 rounded-md text-xs font-extrabold uppercase flex items-center gap-1 border transition-colors ${
+                      active
+                        ? 'bg-slate-900 text-[#ffdb58] border-slate-900'
+                        : 'bg-slate-50 text-slate-700 border-slate-300 hover:border-slate-900'
+                    }`}
+                  >
+                    <span>{s.label}</span>
+                    {active && <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
 
-        <div className="flex flex-col md:flex-row gap-4 mb-8">
-          <div className="flex-1 relative flex border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white focus-within:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] focus-within:-translate-y-0.5 transition-all">
-            <div className={`w-4 border-r-[4px] border-black ${activeTab === 'processo' ? MONDRIAN_COLORS[0] : MONDRIAN_COLORS[1]}`}></div>
-            <div className="p-4 flex items-center justify-center border-r-[4px] border-black">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-            </div>
-            <input type="text" placeholder="Busca Universal (Número, ementa, relator, veto...)" className="w-full p-4 text-xl font-bold outline-none placeholder-gray-400" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-          </div>
-
-          <div className="flex border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white self-stretch">
-            <button onClick={exportToCSV} className="px-4 py-4 md:px-6 font-black uppercase flex items-center justify-center gap-2 transition-colors hover:bg-[#008080] hover:text-white border-r-[4px] border-black group" title="Exportar para CSV">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="group-hover:-translate-y-0.5 transition-transform"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-            </button>
-            <button onClick={() => setViewMode('card')} className={`flex-1 md:flex-none px-6 py-4 font-black uppercase flex items-center justify-center gap-2 transition-colors ${viewMode === 'card' ? 'bg-[#ffdb58]' : 'hover:bg-gray-100'}`}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
-              Cards
-            </button>
-            <div className="w-[4px] bg-black"></div>
-            <button onClick={() => setViewMode('list')} className={`flex-1 md:flex-none px-6 py-4 font-black uppercase flex items-center justify-center gap-2 transition-colors ${viewMode === 'list' ? 'bg-black text-white' : 'hover:bg-gray-100'}`}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
-              Lista
-            </button>
-          </div>
-        </div>
-
+        {/* ===============================================================
+            ESTADOS DE CARREGAMENTO E ERRO
+           =============================================================== */}
         {loading && (
-          <div className="flex flex-col items-center justify-center p-20 border-[6px] border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] gap-6">
-            <svg className="animate-spin w-16 h-16 flex-shrink-0" viewBox="0 0 100 100">
-              <circle cx="50" cy="50" r="40" fill="none" stroke={PIE_COLORS[2]} strokeWidth="12" strokeDasharray="60 251.2" strokeDashoffset="0" strokeLinecap="round" />
-              <circle cx="50" cy="50" r="40" fill="none" stroke={PIE_COLORS[1]} strokeWidth="12" strokeDasharray="60 251.2" strokeDashoffset="-83.7" strokeLinecap="round" />
-              <circle cx="50" cy="50" r="40" fill="none" stroke={PIE_COLORS[0]} strokeWidth="12" strokeDasharray="60 251.2" strokeDashoffset="-167.4" strokeLinecap="round" />
-            </svg>
-            <h2 className="text-3xl font-black uppercase animate-pulse">A Carregar Dados...</h2>
+          <div className="bg-white border-2 border-slate-900 rounded-2xl p-16 shadow-[4px_4px_0px_0px_#0f172a] flex flex-col items-center justify-center gap-4">
+            <div className="flex gap-2">
+              <div className="w-5 h-5 bg-[#c41e3a] border-2 border-slate-900 animate-bounce"></div>
+              <div className="w-5 h-5 bg-[#008080] border-2 border-slate-900 animate-bounce [animation-delay:150ms]"></div>
+              <div className="w-5 h-5 bg-[#ffdb58] border-2 border-slate-900 animate-bounce [animation-delay:300ms]"></div>
+            </div>
+            <h2 className="text-xl font-black uppercase tracking-wider">Sincronizando Proposições...</h2>
           </div>
         )}
 
         {error && (
-          <div className="p-8 border-[6px] border-black bg-[#c41e3a] text-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] flex items-center gap-4">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-12 h-12 flex-shrink-0"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+          <div className="bg-[#c41e3a] text-white border-2 border-slate-900 rounded-2xl p-6 shadow-[4px_4px_0px_0px_#0f172a] flex items-center gap-4">
+            <div className="p-3 bg-white text-[#c41e3a] rounded-xl border-2 border-slate-900 font-black text-xl">!</div>
             <div>
-              <h2 className="text-2xl font-black uppercase mb-2">Erro de Ligação</h2>
-              <p className="font-bold text-lg">{error}</p>
+              <h2 className="text-lg font-black uppercase">Erro de Conexão com a Planilha</h2>
+              <p className="text-sm font-bold opacity-95 mt-0.5">{error}</p>
             </div>
           </div>
         )}
 
-        {/* CABEÇALHO DE ORDENAÇÃO UNIVERSAL - VISÍVEL EM AMBAS AS VIEWS */}
-        {!loading && !error && sortedFilteredData.length > 0 && (
-          <div className="hidden md:flex flex-row bg-black text-white border-[4px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] mb-6">
-            <div className="w-4 border-r-[4px] border-black flex-shrink-0"></div>
-            <div className="p-4 flex-grow flex flex-row gap-6 items-center">
-              
-              <div className="md:w-32 flex-shrink-0 cursor-pointer hover:text-[#ffdb58] flex items-center gap-1 font-black uppercase text-[11px]" onClick={() => handleSort('numero')}>
-                PROPOSIÇÃO {sortConfig.key === 'numero' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-              </div>
-              
-              <div className="flex-grow grid grid-cols-12 gap-4 w-full">
-                <div className="col-span-4 cursor-pointer hover:text-[#ffdb58] flex items-center gap-1 font-black uppercase text-[11px]" onClick={() => handleSort('movimento')}>
-                  ÚLTIMO MOV. {sortConfig.key === 'movimento' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-                </div>
-                <div className="col-span-5 cursor-pointer hover:text-[#ffdb58] flex items-center gap-1 font-black uppercase text-[11px]" onClick={() => handleSort('ementa')}>
-                  EMENTA {sortConfig.key === 'ementa' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-                </div>
-                <div className="col-span-3">
-                   <div className="cursor-pointer hover:text-[#ffdb58] flex items-center gap-1 font-black uppercase text-[11px] mb-1" onClick={() => handleSort('situacao')}>
-                     SITUAÇÃO / SETOR {sortConfig.key === 'situacao' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-                   </div>
-                   {activeTab === 'processo' && (
-                     <div className="cursor-pointer hover:text-[#008080] flex items-center gap-1 font-black uppercase text-[9px] text-gray-300" onClick={() => handleSort('publicacao')}>
-                       PUB. REDAÇÃO FINAL {sortConfig.key === 'publicacao' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-                     </div>
-                   )}
-                </div>
-              </div>
-
-              <div className="w-64 flex-shrink-0 pl-4 border-l-[3px] border-transparent font-black uppercase text-[11px]">
-                NOTAS INTERNAS
-              </div>
-            </div>
-          </div>
-        )}
-
+        {/* ===============================================================
+            VISUALIZAÇÃO EM CARDS (MONDRIAN SUAVIZADO)
+           =============================================================== */}
         {!loading && !error && viewMode === 'card' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {sortedFilteredData.map((item, index) => {
-              const numeroProp = getNumero(item) || 'S/N';
-              const ementaProp = getEmenta(item);
-              const ultimoMovimentoProp = getUltimoMovimento(item);
-              const obsProp = getObservacoes(item);
-              const linkProp = getLink(item);
-              const vistaProp = getPedidoVista(item);
-              const infoRelatoriaProp = getInformacaoRelatoria(item);
-              
-              const sitLower = (getSituacao(item) || '').toLowerCase();
-              const ultMovLower = ultimoMovimentoProp.toLowerCase();
-              const obsLower = obsProp.toLowerCase();
-
-              const prefix = numeroProp.split('/')[0].replace('.', '');
-              const isProcesso = ['PL', 'PEC', 'PLC', 'PDL', 'PRC', 'MPV', 'VET', 'MSG', 'PSA'].includes(prefix);
-
-              let parsedLinks = [];
-              try {
-                const rawLinks = getLinksAdicionais(item);
-                if (rawLinks && rawLinks !== '-') parsedLinks = JSON.parse(rawLinks);
-              } catch(e) {}
-
-              let isVeto = false;
-              let isAprovadoLei = false;
-              let vetoLink = null;
-              let leiLink = null;
-
-              if (isProcesso) {
-                 const temPalavraVeto = sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto');
-                 vetoLink = parsedLinks.find(l => l.label.toLowerCase().includes('veto'));
-                 if (temPalavraVeto || vetoLink) isVeto = true;
-
-                 const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica') || ultMovLower.includes('transformado em lei') || ultMovLower.includes('redação final');
-                 leiLink = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
-                 if ((temPalavraLei || leiLink) && !isVeto) isAprovadoLei = true;
-              }
-
-              const isArquivado = sitLower.includes('arquivad') || sitLower.includes('retirado') || sitLower.includes('rejeitado') || sitLower.includes('concluíd') || isAprovadoLei || isVeto;
-
-              let boxColorClass = 'bg-[#ffdb58]/30 text-black border-black';
-              let titleColorClass = 'text-black';
-              let boxTitle = 'Último Movimento';
-              let iconeCaixa = <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>;
-              
-              const dataUltMov = extrairDataUltimoMovimento(ultimoMovimentoProp);
-              let textoCaixa = formatarUltimoMovimento(ultimoMovimentoProp);
-
-              if (isVeto) {
-                boxColorClass = 'bg-[#c41e3a] text-white border-black';
-                titleColorClass = 'text-white';
-                boxTitle = 'PROJETO VETADO';
-                iconeCaixa = <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
-              } else if (vistaProp) {
-                boxColorClass = 'bg-[#c41e3a] text-white border-black';
-                titleColorClass = 'text-white';
-                boxTitle = 'Pedido de Vista Ativo';
-                iconeCaixa = <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>;
-                textoCaixa = `Vista de ${vistaProp}`;
-              } else {
-                const textoLower = textoCaixa.toLowerCase();
-                if (isAprovadoLei || sitLower.includes('concluíd') || sitLower.includes('aprovad') || textoLower.includes('aprovado por unanimidade')) {
-                   boxColorClass = 'bg-[#008080] text-white border-black';
-                   titleColorClass = 'text-white';
-                   if (textoLower.includes('diligência') && !sitLower.includes('concluíd') && !isArquivado) {
-                       boxColorClass = 'bg-[#ffdb58] text-black border-black';
-                       titleColorClass = 'text-black';
-                   }
-                } 
-                else if (isArquivado) {
-                   boxColorClass = 'bg-gray-500 text-white border-black';
-                   titleColorClass = 'text-white';
-                }
-                else if (sitLower.includes('aguardando') || sitLower.includes('comissão') || textoLower.includes('aguardando') || textoLower.includes('diligência')) {
-                   boxColorClass = 'bg-[#ffdb58] text-black border-black';
-                   titleColorClass = 'text-black';
-                }
-              }
+          <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {sortedFilteredData.map((item) => {
+              const theme = getStatusTheme(item);
 
               return (
-                <div key={index} onClick={(e) => { if(!e.target.closest('a') && !e.target.closest('button') && !e.target.closest('textarea')) setSelectedItem(item); }} className="relative hover:-translate-y-1 transition-transform duration-200 cursor-pointer group flex flex-col h-full">
-                  <div className={`absolute inset-0 top-[6px] left-[6px] right-[-6px] bottom-[-6px] transition-all duration-200 group-hover:top-[10px] group-hover:left-[10px] group-hover:right-[-10px] group-hover:bottom-[-10px] ${isAprovadoLei ? 'bg-gradient-to-br from-[#c41e3a] via-[#ffdb58] to-[#008080]' : 'bg-black'}`}></div>
-                  
-                  <div className="relative z-10 bg-white border-[5px] border-black flex flex-col flex-grow">
-                    <div className="border-b-[5px] border-black p-4 flex justify-between items-start bg-gray-100">
-                      <div>
-                        <span className="bg-black text-white px-2 py-1 text-xs font-black tracking-widest uppercase">
-                          {getTipoProposicao(item)}
+                <article
+                  key={item.numero}
+                  onClick={(e) => {
+                    if (!e.target.closest('a') && !e.target.closest('button') && !e.target.closest('textarea')) {
+                      setSelectedItem(item);
+                    }
+                  }}
+                  className="bg-white border-2 border-slate-900 rounded-2xl shadow-[4px_4px_0px_0px_#0f172a] hover:shadow-[6px_6px_0px_0px_#0f172a] hover:-translate-y-0.5 transition-all cursor-pointer flex flex-col overflow-hidden"
+                >
+                  {/* Barra de Cor Superior Mondrian */}
+                  <div className={`h-2.5 w-full border-b-2 border-slate-900 ${theme.accentBar}`}></div>
+
+                  {/* Cabeçalho do Card */}
+                  <div className="p-4 border-b border-slate-200 flex justify-between items-start gap-2 bg-slate-50/70">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="px-2 py-0.5 rounded bg-slate-900 text-white text-[10px] font-black uppercase tracking-wider">
+                          {item.tipo}
                         </span>
-                        <h3 className="text-3xl font-black mt-2 text-black">
-                          {numeroProp}
-                        </h3>
+                        <span className={`px-2 py-0.5 rounded border border-slate-900 text-[10px] font-black uppercase tracking-wider ${theme.badgeBg}`}>
+                          {theme.label}
+                        </span>
                       </div>
-                      {linkProp && linkProp !== '-' && (
-                        <a href={linkProp} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="bg-white p-2 border-2 border-black hover:bg-gray-200 transition-colors" title="Ver na ALESC">
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-black"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
-                        </a>
+                      <h3 className="text-2xl font-black text-slate-900 mt-2 tracking-tight">
+                        {item.numero}
+                      </h3>
+                      {item.autoria && (
+                        <p className="text-[11px] font-bold text-slate-600 mt-0.5 line-clamp-1" title={item.autoria}>
+                          Autoria: <span className="text-slate-900">{item.autoria}</span>
+                        </p>
                       )}
                     </div>
 
-                    <div className="p-5 flex-grow flex flex-col gap-4">
-                      
-                      <div className={`border-[3px] p-3 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] ${boxColorClass}`}>
-                        <p className={`text-[10px] font-black uppercase tracking-wider flex items-center justify-between mb-1 ${titleColorClass}`}>
-                          <span className="flex items-center gap-1">{iconeCaixa} {boxTitle}</span>
-                          {dataUltMov && <span>{dataUltMov}</span>}
-                        </p>
-                        <p className={`text-[13px] font-bold leading-snug ${titleColorClass}`}>
-                          {textoCaixa}
+                    {item.link && item.link !== '-' && (
+                      <a
+                        href={item.link}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="p-2 rounded-lg bg-white border-2 border-slate-900 hover:bg-[#ffdb58] transition-colors flex-shrink-0"
+                        title="Abrir proposição no Portal e-Legis ALESC"
+                      >
+                        <svg className="w-4 h-4 text-slate-900" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <path d="M15 3h6v6" />
+                          <path d="M10 14 21 3" />
+                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                        </svg>
+                      </a>
+                    )}
+                  </div>
+
+                  {/* Corpo do Card */}
+                  <div className="p-4 flex-1 flex flex-col gap-3.5">
+                    {/* Destaque Especial: Pedido de Vista e Com Quem Está */}
+                    {item.pedidoVista && (
+                      <div className="p-3 rounded-xl border-2 border-[#c41e3a] bg-[#c41e3a]/10">
+                        <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-[#c41e3a] mb-1">
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-[#c41e3a] animate-pulse"></span>
+                            Pedido de Vista — Com quem:
+                          </span>
+                        </div>
+                        <p className="text-xs font-black text-slate-900 leading-snug">
+                          {item.pedidoVista}
                         </p>
                       </div>
+                    )}
 
-                      <div className="bg-gray-50 border-[2px] border-black p-3 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
-                        <p className="text-[10px] font-black text-gray-800 uppercase tracking-wider mb-1">Ementa / Resumo</p>
-                        <p className="text-[13px] font-bold text-gray-800 leading-snug line-clamp-4">
-                          {ementaProp || <span className="text-gray-400 italic font-normal">Ementa não informada.</span>}
+                    {/* Destaque Especial: Lei Aprovada */}
+                    {item.isVirouLei && (
+                      <div className="p-3 rounded-xl border-2 border-[#008080] bg-[#008080]/10 flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-wider text-[#008080]">
+                            Transformado em Norma Jurídica
+                          </p>
+                          <p className="text-sm font-black text-slate-900">
+                            {item.numeroLei ? `Lei nº ${item.numeroLei}` : 'Lei Aprovada'}
+                            {item.dataRedacaoFinal ? ` • ${item.dataRedacaoFinal}` : ''}
+                          </p>
+                        </div>
+                        {item.leiLink?.url && (
+                          <a
+                            href={item.leiLink.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="px-2.5 py-1.5 rounded-lg bg-[#008080] text-white text-[10px] font-black uppercase border border-slate-900 hover:opacity-90 flex-shrink-0"
+                          >
+                            Ver Lei
+                          </a>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Ementa */}
+                    <div className="bg-[#f5f4ef] border border-slate-300 rounded-xl p-3">
+                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">
+                        Ementa / Resumo
+                      </p>
+                      <p className="text-xs font-bold text-slate-800 leading-relaxed line-clamp-4">
+                        {item.ementa || <span className="italic font-normal text-slate-400">Ementa não informada.</span>}
+                      </p>
+                    </div>
+
+                    {/* Último Movimento */}
+                    <div className={`p-3 rounded-xl border ${theme.boxBg}`}>
+                      <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-wider mb-1">
+                        <span>Último Movimento</span>
+                        {item.dataUltMov && <span>{item.dataUltMov}</span>}
+                      </div>
+                      <p className="text-xs font-bold leading-snug line-clamp-3">
+                        {item.textoUltMov}
+                      </p>
+                    </div>
+
+                    {/* Situação, Setor e Relatoria */}
+                    <div className="grid grid-cols-2 gap-3 pt-1 text-xs">
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase text-slate-400">Situação Atual</p>
+                        <p className="font-extrabold text-slate-900 truncate" title={item.situacao}>
+                          {item.situacao}
                         </p>
                       </div>
-
-                      <div>
-                        <p className="text-[10px] font-bold text-gray-500 uppercase">Situação Geral</p>
-                        <p className="text-[16px] font-black leading-tight border-l-[4px] border-black pl-3 mt-1 truncate">
-                          {getSituacao(item) || '-'}
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase text-slate-400">Setor / Comissão</p>
+                        <p className="font-extrabold text-slate-800 truncate" title={item.setor}>
+                          {item.setor}
                         </p>
-                        {isAprovadoLei && getDataPublicacaoPreLei(item) && (
-                          <p className="text-[10px] font-bold text-[#008080] mt-1 pl-3 uppercase">
-                            Pub. Redação Final: {getDataPublicacaoPreLei(item)}
+                      </div>
+                    </div>
+
+                    {item.isProcesso && (item.relator || item.infoRelatoria) && (
+                      <div className="pt-2.5 border-t border-dashed border-slate-300 text-xs">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] font-bold uppercase text-slate-400">Relator(a):</span>
+                          {item.dataDistribuicao && (
+                            <span className="text-[10px] font-bold text-slate-400">
+                              Dist: {formatarData(item.dataDistribuicao)}
+                            </span>
+                          )}
+                        </div>
+                        <p className="font-black text-slate-900 uppercase truncate" title={item.relator}>
+                          {item.relator || 'Não designado'}
+                        </p>
+                        {item.infoRelatoria && (
+                          <p className="text-[11px] font-bold text-[#008080] italic mt-0.5 line-clamp-2">
+                            {item.infoRelatoria}
                           </p>
                         )}
                       </div>
-                      
-                      <div className="flex justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[10px] font-bold text-gray-500 uppercase">Setor Atual</p>
-                          <p className="text-[13px] font-bold leading-snug truncate">{getSetor(item) || '-'}</p>
-                        </div>
-                        <div className="flex-shrink-0 text-right">
-                          <p className="text-[10px] font-bold text-gray-500 uppercase">Verificado</p>
-                          <p className="text-[13px] font-bold text-gray-600">{formatarData(item['Data da Verificação'])}</p>
-                        </div>
+                    )}
+
+                    {/* Notas Internas dos Articuladores */}
+                    <div className="mt-auto pt-3 border-t border-slate-200">
+                      <div className="flex justify-between items-center mb-1.5">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                          </svg>
+                          Notas dos Articuladores
+                        </span>
+                        {editingId !== item.numero && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingId(item.numero);
+                              setEditValue(item.observacoes || '');
+                            }}
+                            className="text-[10px] font-extrabold uppercase underline text-[#008080] hover:text-slate-900"
+                          >
+                            Editar
+                          </button>
+                        )}
                       </div>
 
-                      {activeTab === 'processo' && !isArquivado && (
-                        <div className="pt-4 border-t-[3px] border-black border-dashed flex flex-col gap-1">
-                          <div className="flex justify-between items-center">
-                            <div className="overflow-hidden">
-                              <p className="text-[10px] font-bold text-gray-500 uppercase">Relator(a)</p>
-                              <p className="font-black text-[13px] uppercase truncate" title={getRelator(item)}>{getRelator(item) || '-'}</p>
-                            </div>
-                            <div className="text-right flex-shrink-0 ml-2">
-                              <p className="text-[10px] font-bold text-gray-500 uppercase">Distribuição</p>
-                              <p className="text-[13px] font-bold text-gray-600">{formatarData(item['Data de Distribuição'])}</p>
-                            </div>
-                          </div>
-                          {infoRelatoriaProp && (
-                            <p className="text-[14px] font-bold text-gray-700 italic leading-tight mt-1">
-                              {infoRelatoriaProp}
-                            </p>
-                          )}
-                        </div>
-                      )}
-
-                      <div className="mt-auto pt-4 border-t-[3px] border-black bg-gray-50 -mx-5 px-5 pb-5 -mb-5 flex-grow-0">
-                        <div className="flex justify-between items-center mb-2">
-                          <p className="text-xs font-black text-gray-800 uppercase flex items-center gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Notas Internas
-                          </p>
-                          {editingId !== numeroProp && (
-                            <button onClick={(e) => { e.stopPropagation(); setEditingId(numeroProp); setEditValue(obsProp || ''); }} className="text-[10px] font-bold uppercase underline hover:text-[#008080] transition-colors">
-                              Editar
+                      {editingId === item.numero ? (
+                        <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+                          <textarea
+                            rows="2"
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            placeholder="Anotação para os articuladores..."
+                            className="w-full p-2 text-xs font-bold border-2 border-slate-900 rounded-lg bg-[#f5f4ef] outline-none focus:border-[#008080]"
+                          />
+                          <div className="flex justify-end gap-1.5">
+                            <button
+                              onClick={() => setEditingId(null)}
+                              disabled={isSaving}
+                              className="px-2.5 py-1 rounded border border-slate-400 text-[10px] font-bold uppercase"
+                            >
+                              Cancelar
                             </button>
-                          )}
+                            <button
+                              onClick={() => handleSaveObservacao(item.numero)}
+                              disabled={isSaving}
+                              className="px-3 py-1 rounded border border-slate-900 bg-[#008080] text-white text-[10px] font-black uppercase"
+                            >
+                              {isSaving ? 'Salvando...' : 'Salvar'}
+                            </button>
+                          </div>
                         </div>
-                        
-                        {editingId === numeroProp ? (
-                          <div className="flex flex-col gap-2" onClick={e => e.stopPropagation()}>
-                            <textarea className="w-full border-2 border-black p-2 text-[13px] font-bold resize-none outline-none focus:border-[#008080]" rows="3" value={editValue} onChange={(e) => setEditValue(e.target.value)} placeholder="Escreva uma anotação aqui..."/>
-                            <div className="flex gap-2 justify-end">
-                              <button onClick={() => setEditingId(null)} className="px-3 py-1 bg-white border-2 border-black text-xs font-bold uppercase hover:bg-gray-200 transition-colors" disabled={isSaving}>Cancelar</button>
-                              <button onClick={() => handleSaveObservacao(numeroProp)} className={`px-3 py-1 border-2 border-black text-xs font-black uppercase text-white ${MONDRIAN_COLORS[1]} hover:opacity-90 flex items-center gap-2 transition-opacity`} disabled={isSaving}>{isSaving ? '...' : 'Guardar'}</button>
-                            </div>
-                          </div>
-                        ) : (
-                          <p className="text-[13px] font-bold text-gray-700 min-h-[2rem] whitespace-pre-wrap line-clamp-2">
-                            {obsProp || <span className="text-gray-400 italic font-normal">Nenhuma observação inserida.</span>}
-                          </p>
-                        )}
-
-                        {parsedLinks.length > 0 && isProcesso && (
-                          <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t-[3px] border-black border-dashed">
-                            {(() => {
-                              if (isVeto && vetoLink) {
-                                  if (vetoLink.url) {
-                                      return <a href={vetoLink.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-2 border-black px-2 py-1 flex items-center gap-1 hover:bg-red-800 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">VETO (DIÁRIO OFICIAL)</a>;
-                                  } else {
-                                      return <span className="text-[10px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-2 border-black px-2 py-1 flex items-center gap-1 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" title="Veto identificado, mas sem link publicado.">VETO REGISTRADO</span>;
-                                  }
-                              } else if (isAprovadoLei && leiLink) {
-                                  const numLei = extrairNumeroLei(item);
-                                  const leiLabel = numLei ? <span className="text-[12px] font-black text-gray-800 flex items-center ml-1">Nº {numLei}</span> : null;
-
-                                  if (leiLink.url) {
-                                      return <div className="flex items-center"><a href={leiLink.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-2 border-black px-2 py-1 flex items-center gap-1 hover:bg-[#0097a7] transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</a>{leiLabel}</div>;
-                                  } else {
-                                      return <div className="flex items-center"><span className="text-[10px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-2 border-black px-2 py-1 flex items-center gap-1 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</span>{leiLabel}</div>;
-                                  }
-                              }
-                              return null;
-                            })()}
-                          </div>
-                        )}
-                      </div>
+                      ) : (
+                        <p className="text-xs font-bold text-slate-700 line-clamp-2">
+                          {item.observacoes || (
+                            <span className="italic font-normal text-slate-400">Sem anotações internas.</span>
+                          )}
+                        </p>
+                      )}
                     </div>
                   </div>
-                </div>
+                </article>
               );
             })}
-          </div>
+          </section>
         )}
 
+        {/* ===============================================================
+            VISUALIZAÇÃO EM LISTA COMPACTA
+           =============================================================== */}
         {!loading && !error && viewMode === 'list' && (
-          <div className="flex flex-col gap-4">
-            
-            {sortedFilteredData.map((item, index) => {
-              const numeroProp = getNumero(item) || 'S/N';
-              const ementaProp = getEmenta(item);
-              const ultimoMovimentoProp = getUltimoMovimento(item);
-              const obsProp = getObservacoes(item);
-              const linkProp = getLink(item);
-              const vistaProp = getPedidoVista(item);
-              
-              const sitLower = (getSituacao(item) || '').toLowerCase();
-              const ultMovLower = ultimoMovimentoProp.toLowerCase();
-              const obsLower = obsProp.toLowerCase();
-
-              const prefix = numeroProp.split('/')[0].replace('.', '');
-              const isProcesso = ['PL', 'PEC', 'PLC', 'PDL', 'PRC', 'MPV', 'VET', 'MSG', 'PSA'].includes(prefix);
-
-              let parsedLinks = [];
-              try {
-                const rawLinks = getLinksAdicionais(item);
-                if (rawLinks && rawLinks !== '-') parsedLinks = JSON.parse(rawLinks);
-              } catch(e) {}
-
-              let isVeto = false;
-              let isAprovadoLei = false;
-              let vetoLink = null;
-              let leiLink = null;
-
-              if (isProcesso) {
-                 const temPalavraVeto = sitLower.includes('veto') || ultMovLower.includes('veto') || obsLower.includes('veto');
-                 vetoLink = parsedLinks.find(l => l.label.toLowerCase().includes('veto'));
-                 if (temPalavraVeto || vetoLink) isVeto = true;
-
-                 const temPalavraLei = sitLower.includes('lei') || sitLower.includes('norma jurídica') || ultMovLower.includes('transformado em lei') || ultMovLower.includes('redação final');
-                 leiLink = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
-                 if ((temPalavraLei || leiLink) && !isVeto) isAprovadoLei = true;
-              }
-
-              const isArquivado = sitLower.includes('arquivad') || sitLower.includes('retirado') || sitLower.includes('rejeitado') || sitLower.includes('concluíd') || isAprovadoLei || isVeto;
-
-              let boxColorClass = 'bg-white text-black';
-              let titleColorClass = 'text-black';
-              let boxTitle = 'Último Movimento';
-              
-              const dataUltMov = extrairDataUltimoMovimento(ultimoMovimentoProp);
-              let textoCaixa = formatarUltimoMovimento(ultimoMovimentoProp);
-
-              if (isVeto) {
-                boxColorClass = 'bg-[#c41e3a] text-white';
-                titleColorClass = 'text-white';
-                boxTitle = 'PROJETO VETADO';
-              } else if (vistaProp) {
-                boxColorClass = 'bg-[#c41e3a] text-white';
-                titleColorClass = 'text-white';
-                boxTitle = 'Pedido de Vista';
-                textoCaixa = `Vista de ${vistaProp}`;
-              } else {
-                const textoLower = textoCaixa.toLowerCase();
-                if (isAprovadoLei || sitLower.includes('concluíd') || sitLower.includes('aprovad') || textoLower.includes('aprovado por unanimidade')) {
-                   boxColorClass = 'bg-[#008080] text-white';
-                   titleColorClass = 'text-white';
-                   if (textoLower.includes('diligência') && !sitLower.includes('concluíd') && !isArquivado) {
-                       boxColorClass = 'bg-[#ffdb58] text-black';
-                       titleColorClass = 'text-black';
-                   }
-                } else if (isArquivado) {
-                   boxColorClass = 'bg-gray-200 text-black';
-                } else if (sitLower.includes('aguardando') || sitLower.includes('comissão') || textoLower.includes('aguardando') || textoLower.includes('diligência')) {
-                   boxColorClass = 'bg-[#ffdb58] text-black';
-                   titleColorClass = 'text-black';
-                } else if (textoCaixa !== '-') {
-                   boxColorClass = 'bg-[#ffdb58]/30 text-black';
-                }
-              }
+          <section className="space-y-3">
+            {sortedFilteredData.map((item) => {
+              const theme = getStatusTheme(item);
 
               return (
-                <div key={index} onClick={(e) => { if(!e.target.closest('a') && !e.target.closest('button') && !e.target.closest('textarea')) setSelectedItem(item); }} className="relative hover:-translate-y-1 transition-transform duration-200 cursor-pointer group flex flex-col md:flex-row h-full">
-                  <div className={`absolute inset-0 top-[4px] left-[4px] right-[-4px] bottom-[-4px] transition-all duration-200 group-hover:top-[6px] group-hover:left-[6px] group-hover:right-[-6px] group-hover:bottom-[-6px] ${isAprovadoLei ? 'bg-gradient-to-br from-[#c41e3a] via-[#ffdb58] to-[#008080]' : 'bg-black'}`}></div>
+                <div
+                  key={item.numero}
+                  onClick={(e) => {
+                    if (!e.target.closest('a') && !e.target.closest('button') && !e.target.closest('textarea')) {
+                      setSelectedItem(item);
+                    }
+                  }}
+                  className="bg-white border-2 border-slate-900 rounded-xl shadow-[3px_3px_0px_0px_#0f172a] hover:shadow-[5px_5px_0px_0px_#0f172a] transition-all cursor-pointer flex flex-col md:flex-row overflow-hidden"
+                >
+                  <div className={`w-full md:w-3 h-2 md:h-auto border-b-2 md:border-b-0 md:border-r-2 border-slate-900 flex-shrink-0 ${theme.accentBar}`}></div>
 
-                  <div className="relative z-10 bg-white border-[4px] border-black flex flex-col md:flex-row flex-grow overflow-hidden">
-                    <div className="w-full md:w-4 min-h-[1rem] md:min-h-full border-b-[4px] md:border-b-0 md:border-r-[4px] border-black flex-shrink-0 bg-gray-200"></div>
-                    
-                    <div className="p-4 flex-grow flex flex-col md:flex-row gap-6 items-start md:items-center">
-                      <div className="flex flex-row md:flex-col gap-2 items-center md:items-start md:w-32 flex-shrink-0">
-                        <span className="bg-black text-white px-2 py-1 text-xs font-black tracking-widest uppercase">
-                          {getTipoProposicao(item)}
+                  <div className="p-4 flex-1 grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                    {/* Coluna 1: Identificação */}
+                    <div className="md:col-span-2 flex flex-col gap-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="px-1.5 py-0.5 rounded bg-slate-900 text-white text-[10px] font-black uppercase">
+                          {item.tipo}
                         </span>
-                        <span className="text-sm font-black tracking-widest uppercase">
-                          {numeroProp}
+                        <span className={`px-1.5 py-0.5 rounded border border-slate-900 text-[9px] font-black uppercase ${theme.badgeBg}`}>
+                          {theme.label}
                         </span>
-                        {linkProp && linkProp !== '-' && (
-                          <a href={linkProp} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] font-black uppercase underline hover:text-[#008080]">Ver na ALESC</a>
-                        )}
                       </div>
+                      <h4 className="text-base font-black text-slate-900">{item.numero}</h4>
+                      {item.autoria && (
+                        <span className="text-[11px] font-bold text-slate-500 truncate" title={item.autoria}>
+                          {item.autoria}
+                        </span>
+                      )}
+                    </div>
 
-                      <div className="flex-grow grid grid-cols-1 md:grid-cols-12 gap-4 w-full">
-                        <div className="md:col-span-4">
-                          <div className={`p-2 border-[2px] border-black ${boxColorClass} h-full flex flex-col justify-center`}>
-                            <p className={`text-[10px] font-black uppercase tracking-wider mb-1 flex items-center justify-between ${titleColorClass}`}>
-                              <span>{boxTitle}</span>
-                              {dataUltMov && <span>{dataUltMov}</span>}
-                            </p>
-                            <p className={`text-[13px] font-bold line-clamp-3 ${titleColorClass}`} title={textoCaixa}>{textoCaixa}</p>
-                          </div>
+                    {/* Coluna 2: Ementa */}
+                    <div className="md:col-span-4">
+                      <p className="text-xs font-bold text-slate-800 line-clamp-3" title={item.ementa}>
+                        {item.ementa || '-'}
+                      </p>
+                    </div>
+
+                    {/* Coluna 3: Último Movimento & Vista */}
+                    <div className="md:col-span-3 space-y-1.5">
+                      {item.pedidoVista && (
+                        <div className="px-2.5 py-1 rounded-lg bg-[#c41e3a]/10 border border-[#c41e3a] text-[11px] font-black text-[#c41e3a]">
+                          Vista: {item.pedidoVista}
                         </div>
-                        <div className="md:col-span-5 flex flex-col justify-center">
-                          <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1 md:hidden">Ementa</p>
-                          <p className="text-[13px] font-bold text-gray-800 line-clamp-3" title={ementaProp}>{ementaProp || '-'}</p>
-                        </div>
-                        <div className="md:col-span-3 flex flex-col justify-center">
-                          <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1 md:hidden">Situação / Setor</p>
-                          <p className="text-[13px] font-bold">{getSituacao(item) || '-'}</p>
-                          <p className="text-[10px] text-gray-600 font-bold line-clamp-2">{getSetor(item) || '-'}</p>
-                          {isAprovadoLei && getDataPublicacaoPreLei(item) && (
-                            <p className="text-[10px] font-bold text-[#008080] mt-1">
-                              Pub. Redação Final: {getDataPublicacaoPreLei(item)}
-                            </p>
-                          )}
-                        </div>
+                      )}
+                      <div className={`p-2 rounded-lg border text-xs font-bold ${theme.boxBg}`}>
+                        <span className="block text-[10px] font-black uppercase opacity-75">
+                          {item.dataUltMov || 'Movimento'}
+                        </span>
+                        <span className="line-clamp-2">{item.textoUltMov}</span>
                       </div>
+                    </div>
 
-                      <div className="w-full md:w-64 flex-shrink-0 border-t-[3px] md:border-t-0 md:border-l-[3px] border-black border-dashed pt-3 md:pt-0 md:pl-4">
-                        <div className="flex justify-between items-center mb-2">
-                          <p className="text-xs font-black text-gray-800 uppercase flex items-center gap-1 md:hidden">Notas</p>
-                          {editingId !== numeroProp && (
-                            <button onClick={(e) => { e.stopPropagation(); setEditingId(numeroProp); setEditValue(obsProp || ''); }} className="text-[10px] font-bold uppercase underline hover:text-[#008080] transition-colors md:ml-auto">Editar</button>
-                          )}
-                        </div>
-                        
-                        {editingId === numeroProp ? (
-                          <div className="flex flex-col gap-2" onClick={e => e.stopPropagation()}>
-                            <textarea className="w-full border-2 border-black p-1 text-[13px] font-bold resize-none outline-none focus:border-[#008080]" rows="2" value={editValue} onChange={(e) => setEditValue(e.target.value)} placeholder="Anotação..."/>
-                            <div className="flex gap-1 justify-end">
-                              <button onClick={() => setEditingId(null)} className="px-2 py-1 bg-white border-2 border-black text-[10px] font-bold uppercase hover:bg-gray-200 transition-colors" disabled={isSaving}>X</button>
-                              <button onClick={() => handleSaveObservacao(numeroProp)} className={`px-2 py-1 border-2 border-black text-[10px] font-black uppercase text-white ${MONDRIAN_COLORS[1]} hover:opacity-90 transition-opacity`} disabled={isSaving}>{isSaving ? '...' : 'OK'}</button>
-                            </div>
-                          </div>
-                        ) : (
-                          <p className="text-[13px] font-bold text-gray-700 line-clamp-3" title={obsProp}>
-                            {obsProp || <span className="text-gray-400 italic font-normal">Nenhuma.</span>}
-                          </p>
-                        )}
-
-                        {parsedLinks.length > 0 && isProcesso && (
-                          <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t-[2px] border-black border-dashed">
-                            {(() => {
-                              if (isVeto && vetoLink) {
-                                  if (vetoLink.url) {
-                                      return <a href={vetoLink.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[8px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:bg-red-800">VETO (DIÁRIO OFICIAL)</a>;
-                                  } else {
-                                      return <span className="text-[8px] font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">VETO REGISTRADO</span>;
-                                  }
-                              } else if (isAprovadoLei && leiLink) {
-                                  const numLei = extrairNumeroLei(item);
-                                  const leiLabel = numLei ? <span className="text-[10px] font-black text-gray-800 flex items-center ml-1">Nº {numLei}</span> : null;
-
-                                  if (leiLink.url) {
-                                      return <div className="flex items-center"><a href={leiLink.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[8px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:bg-[#0097a7]">LEI APROVADA</a>{leiLabel}</div>;
-                                  } else {
-                                      return <div className="flex items-center"><span className="text-[8px] font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[1px] border-black px-1.5 py-0.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">LEI APROVADA</span>{leiLabel}</div>;
-                                  }
-                              }
-                              return null;
-                            })()}
-                          </div>
-                        )}
+                    {/* Coluna 4: Situação, Relator e Notas */}
+                    <div className="md:col-span-3 flex flex-col justify-between gap-1 text-xs border-t md:border-t-0 md:border-l border-dashed border-slate-300 pt-2 md:pt-0 md:pl-3">
+                      <div>
+                        <span className="text-[10px] font-bold uppercase text-slate-400">Situação / Setor:</span>
+                        <p className="font-extrabold text-slate-900 truncate">{item.situacao}</p>
+                        <p className="text-[11px] font-bold text-slate-500 truncate">{item.setor}</p>
                       </div>
+                      {item.relator && (
+                        <p className="text-[11px] font-extrabold text-[#008080] truncate">
+                          Rel: {item.relator}
+                        </p>
+                      )}
+                      {item.observacoes && (
+                        <p className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-1 rounded truncate">
+                          💬 {item.observacoes}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
               );
             })}
-          </div>
+          </section>
         )}
-        
-        {!loading && !error && filteredData.length === 0 && (
-          <div className="text-center p-12 border-[5px] border-black bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
-            <h3 className="text-2xl font-black uppercase">Nenhum resultado nesta aba.</h3>
-            <p className="font-bold text-gray-600 mt-2">Experimente limpar os filtros, mudar de aba ou alterar sua busca.</p>
+
+        {/* Estado Vazio */}
+        {!loading && !error && sortedFilteredData.length === 0 && (
+          <div className="bg-white border-2 border-slate-900 rounded-2xl p-12 text-center shadow-[4px_4px_0px_0px_#0f172a]">
+            <h3 className="text-xl font-black uppercase text-slate-900">Nenhuma proposição encontrada</h3>
+            <p className="text-sm font-bold text-slate-500 mt-1">
+              Ajuste os filtros universais ou clique abaixo para mostrar todas as proposições.
+            </p>
+            <button
+              onClick={limparTodosFiltros}
+              className="mt-4 px-5 py-2.5 rounded-xl border-2 border-slate-900 bg-[#ffdb58] font-black text-xs uppercase shadow-[2px_2px_0px_0px_#0f172a]"
+            >
+              Limpar Todos os Filtros
+            </button>
           </div>
         )}
 
+        {/* ===============================================================
+            MODAL DE DETALHES COMPLETOS DA PROPOSIÇÃO
+           =============================================================== */}
         {selectedItem && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setSelectedItem(null)}>
-            <div className="bg-white border-[6px] border-black shadow-[12px_12px_0px_0px_rgba(255,219,88,1)] w-full max-w-4xl max-h-[90vh] flex flex-col relative" onClick={e => e.stopPropagation()}>
-              
-              <div className="border-b-[6px] border-black p-6 bg-gray-100 flex justify-between items-start">
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/75 backdrop-blur-sm"
+            onClick={() => setSelectedItem(null)}
+          >
+            <div
+              className="bg-white border-2 border-slate-900 rounded-2xl shadow-[8px_8px_0px_0px_#ffdb58] w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Barra Mondrian */}
+              <div className="h-3 flex border-b-2 border-slate-900">
+                <div className="w-1/2 bg-[#c41e3a] border-r-2 border-slate-900"></div>
+                <div className="w-1/3 bg-[#008080] border-r-2 border-slate-900"></div>
+                <div className="w-1/6 bg-[#ffdb58]"></div>
+              </div>
+
+              {/* Cabeçalho do Modal */}
+              <div className="p-5 sm:p-6 bg-[#f5f4ef] border-b-2 border-slate-900 flex justify-between items-start gap-4">
                 <div>
-                  <span className="bg-black text-white px-3 py-1 text-sm font-black tracking-widest uppercase">
-                    {getTipoProposicao(selectedItem)}
-                  </span>
-                  <h2 className="text-4xl md:text-5xl font-black mt-3 text-black">
-                    {getNumero(selectedItem) || 'S/N'}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded bg-slate-900 text-white text-xs font-black uppercase">
+                      {selectedItem.tipo}
+                    </span>
+                    <span className={`px-2.5 py-0.5 rounded border border-slate-900 text-xs font-black uppercase ${getStatusTheme(selectedItem).badgeBg}`}>
+                      {getStatusTheme(selectedItem).label}
+                    </span>
+                    {selectedItem.dataEntrada && (
+                      <span className="text-xs font-bold text-slate-500">
+                        Entrada: {formatarData(selectedItem.dataEntrada)}
+                      </span>
+                    )}
+                  </div>
+                  <h2 className="text-3xl sm:text-4xl font-black text-slate-900 mt-2">
+                    {selectedItem.numero}
                   </h2>
+                  {selectedItem.autoria && (
+                    <p className="text-xs sm:text-sm font-bold text-slate-700 mt-1">
+                      Autoria / Subscrição: <strong className="text-slate-900">{selectedItem.autoria}</strong>
+                    </p>
+                  )}
                 </div>
-                <div className="flex gap-3">
-                  {getLink(selectedItem) && getLink(selectedItem) !== '-' && (
-                    <a href={getLink(selectedItem)} target="_blank" rel="noreferrer" className="bg-white p-3 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all" title="Ver na ALESC">
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+
+                <div className="flex items-center gap-2">
+                  {selectedItem.link && selectedItem.link !== '-' && (
+                    <a
+                      href={selectedItem.link}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3.5 py-2.5 rounded-xl bg-white border-2 border-slate-900 font-black text-xs uppercase flex items-center gap-2 hover:bg-[#ffdb58] shadow-[2px_2px_0px_0px_#0f172a]"
+                    >
+                      <span>Abrir na ALESC</span>
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <path d="M15 3h6v6" />
+                        <path d="M10 14 21 3" />
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                      </svg>
                     </a>
                   )}
-                  <button onClick={() => setSelectedItem(null)} className="bg-white p-3 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:bg-[#c41e3a] hover:text-white transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                  <button
+                    onClick={() => setSelectedItem(null)}
+                    className="p-2.5 rounded-xl bg-white border-2 border-slate-900 hover:bg-[#c41e3a] hover:text-white transition-colors shadow-[2px_2px_0px_0px_#0f172a]"
+                  >
+                    ✕
                   </button>
                 </div>
               </div>
 
-              <div className="p-6 md:p-8 flex flex-col gap-6 overflow-y-auto">
-                
-                <div className="border-[3px] border-black p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-[#ffdb58]">
-                  <p className="text-xs font-black text-black uppercase tracking-wider flex items-center justify-between mb-2">
-                    <span className="flex items-center gap-2">
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
-                      Último Movimento
-                    </span>
-                    {extrairDataUltimoMovimento(getUltimoMovimento(selectedItem)) && (
-                      <span>{extrairDataUltimoMovimento(getUltimoMovimento(selectedItem))}</span>
-                    )}
-                  </p>
-                  <p className="text-lg font-black text-black leading-snug">
-                    {formatarUltimoMovimento(getUltimoMovimento(selectedItem)) || '-'}
-                  </p>
-                </div>
-
-                <div className="border-[3px] border-black p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-                  <p className="text-xs font-black text-gray-500 uppercase tracking-wider mb-2">Ementa / Resumo</p>
-                  <p className="text-[15px] font-bold text-gray-800 leading-relaxed whitespace-pre-wrap">
-                    {getEmenta(selectedItem) || '-'}
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="flex flex-col gap-6">
-                    <div className="border-[3px] border-black p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-center">
-                      <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Situação Geral</p>
-                      <p className="text-xl font-black text-[#008080] leading-tight">{getSituacao(selectedItem) || '-'}</p>
-                      {(() => {
-                        const isProcessoModal = ['PL', 'PEC', 'PLC', 'PDL', 'PRC', 'MPV', 'VET', 'MSG', 'PSA'].includes(getNumero(selectedItem).split('/')[0].replace('.', ''));
-                        const sitLower = (getSituacao(selectedItem) || '').toLowerCase();
-                        const ultMovLower = (getUltimoMovimento(selectedItem) || '').toLowerCase();
-                        const isAprovadoLeiModal = isProcessoModal && (sitLower.includes('lei') || sitLower.includes('norma jurídica') || ultMovLower.includes('transformado em lei') || ultMovLower.includes('redação final'));
-                        if (isAprovadoLeiModal && getDataPublicacaoPreLei(selectedItem)) {
-                           return (
-                             <p className="text-[12px] font-bold text-[#008080] mt-2 uppercase">
-                               Publicação Redação Final: {getDataPublicacaoPreLei(selectedItem)}
-                             </p>
-                           );
-                        }
-                        return null;
-                      })()}
-                    </div>
-                    <div className="border-[3px] border-black p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-center">
-                      <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Setor Atual</p>
-                      <p className="text-[15px] font-black leading-tight">{getSetor(selectedItem) || '-'}</p>
-                      <p className="text-[10px] font-bold text-gray-500 uppercase mt-2">Verificado: {formatarData(selectedItem['Data da Verificação'])}</p>
-                    </div>
+              {/* Corpo do Modal */}
+              <div className="p-5 sm:p-6 overflow-y-auto space-y-5">
+                {/* Alerta de Pedido de Vista no Modal */}
+                {selectedItem.pedidoVista && (
+                  <div className="p-4 rounded-xl border-2 border-[#c41e3a] bg-[#c41e3a]/10">
+                    <p className="text-xs font-black uppercase tracking-wider text-[#c41e3a] mb-1">
+                      Pedido de Vista Registrado (Com Quem Está)
+                    </p>
+                    <p className="text-base font-black text-slate-900">
+                      {selectedItem.pedidoVista}
+                    </p>
                   </div>
+                )}
 
-                  <div className="flex flex-col gap-6 border-[3px] border-black border-dashed p-4">
-                    {(() => {
-                      const sitLowerModal = (getSituacao(selectedItem) || '').toLowerCase();
-                      const ultMovLowerModal = (getUltimoMovimento(selectedItem) || '').toLowerCase();
-                      const obsLowerModal = (getObservacoes(selectedItem) || '').toLowerCase();
-                      const prefixModal = getNumero(selectedItem).split('/')[0].replace('.', '');
-                      const isProcessoModal = ['PL', 'PEC', 'PLC', 'PDL', 'PRC', 'MPV', 'VET', 'MSG', 'PSA'].includes(prefixModal);
-
-                      let parsedLinks = [];
-                      try {
-                        const rawLinks = getLinksAdicionais(selectedItem);
-                        if (rawLinks && rawLinks !== '-') parsedLinks = JSON.parse(rawLinks);
-                      } catch(e) {}
-
-                      let isVetoModal = false;
-                      let isAprovadoLeiModal = false;
-
-                      if (isProcessoModal) {
-                         const temPalavraVeto = sitLowerModal.includes('veto') || ultMovLowerModal.includes('veto') || obsLowerModal.includes('veto');
-                         const temLinkVeto = parsedLinks.some(l => l.label.toLowerCase().includes('veto'));
-                         if (temPalavraVeto || temLinkVeto) isVetoModal = true;
-
-                         const temPalavraLei = sitLowerModal.includes('lei') || sitLowerModal.includes('norma jurídica') || ultMovLowerModal.includes('transformado em lei') || ultMovLowerModal.includes('redação final');
-                         const temLinkLei = parsedLinks.some(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
-                         if ((temPalavraLei || temLinkLei) && !isVetoModal) isAprovadoLeiModal = true;
-                      }
-
-                      const isArquivadoModal = sitLowerModal.includes('arquivad') || sitLowerModal.includes('retirado') || sitLowerModal.includes('rejeitado') || sitLowerModal.includes('concluíd') || isAprovadoLeiModal || isVetoModal;
-                      
-                      return !isArquivadoModal ? (
-                        <>
-                          <div className="flex justify-between items-start border-b-[2px] border-gray-200 pb-3">
-                            <div>
-                              <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Relator(a) Atual</p>
-                              <p className="text-[15px] font-black uppercase">{getRelator(selectedItem) || '-'}</p>
-                              {getInformacaoRelatoria(selectedItem) && (
-                                <p className="text-[14px] font-bold text-gray-700 leading-tight italic mt-1">
-                                  {getInformacaoRelatoria(selectedItem)}
-                                </p>
-                              )}
-                            </div>
-                            <div className="text-right flex-shrink-0 ml-4">
-                              <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Distribuição</p>
-                              <p className="text-sm font-bold">{formatarData(selectedItem['Data de Distribuição'])}</p>
-                            </div>
-                          </div>
-                          <div className="border-b-[2px] border-gray-200 pb-3">
-                            <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Pedido de Vista em Aberto</p>
-                            <p className="text-[15px] font-black uppercase">{getPedidoVista(selectedItem) || 'Nenhum'}</p>
-                          </div>
-                        </>
-                      ) : null;
-                    })()}
-
+                {/* Alerta de Lei Aprovada no Modal */}
+                {selectedItem.isVirouLei && (
+                  <div className="p-4 rounded-xl border-2 border-[#008080] bg-[#008080]/10 flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Processos Anexos</p>
-                      <p className="text-[15px] font-black text-[#008080]">{selectedItem['Processos anexos'] || 'Nenhum'}</p>
+                      <p className="text-xs font-black uppercase tracking-wider text-[#008080]">
+                        Proposição Transformada em Lei
+                      </p>
+                      <p className="text-lg font-black text-slate-900">
+                        {selectedItem.numeroLei ? `Lei nº ${selectedItem.numeroLei}` : 'Norma Jurídica Promulgada'}
+                        {selectedItem.dataRedacaoFinal ? ` • Publicação Redação Final: ${selectedItem.dataRedacaoFinal}` : ''}
+                      </p>
                     </div>
-                  </div>
-                </div>
-
-                <div className="border-[3px] border-black p-5 bg-gray-50">
-                  <div className="flex justify-between items-center mb-3">
-                    <p className="text-xs font-black text-gray-800 uppercase flex items-center gap-2">
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Anotações Internas do Painel
-                    </p>
-                    {editingId !== getNumero(selectedItem) && (
-                      <button onClick={() => { setEditingId(getNumero(selectedItem)); setEditValue(getObservacoes(selectedItem) || ''); }} className="text-[10px] font-black uppercase underline hover:text-[#008080]">EDITAR</button>
+                    {selectedItem.leiLink?.url && (
+                      <a
+                        href={selectedItem.leiLink.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-4 py-2 rounded-xl bg-[#008080] text-white border-2 border-slate-900 font-black text-xs uppercase shadow-[2px_2px_0px_0px_#0f172a]"
+                      >
+                        Acessar Texto da Lei
+                      </a>
                     )}
                   </div>
-                  
-                  {editingId === getNumero(selectedItem) ? (
-                    <div className="flex flex-col gap-3 mt-2">
-                      <textarea className="w-full border-[3px] border-black p-3 text-sm font-bold resize-none outline-none focus:shadow-[4px_4px_0px_0px_rgba(0,128,128,1)] transition-shadow" rows="4" value={editValue} onChange={(e) => setEditValue(e.target.value)} placeholder="Escreva uma anotação aqui..."/>
-                      <div className="flex gap-3 justify-end">
-                        <button onClick={() => setEditingId(null)} className="px-4 py-2 bg-white border-[3px] border-black text-xs font-black uppercase hover:bg-gray-200" disabled={isSaving}>Cancelar</button>
-                        <button onClick={() => handleSaveObservacao(getNumero(selectedItem))} className={`px-4 py-2 border-[3px] border-black text-xs font-black uppercase text-white ${MONDRIAN_COLORS[1]} hover:opacity-90`} disabled={isSaving}>{isSaving ? 'A guardar...' : 'Guardar'}</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-[15px] font-bold text-gray-700 min-h-[3rem] whitespace-pre-wrap">
-                      {getObservacoes(selectedItem) || <span className="text-gray-400 italic font-normal">Nenhuma observação inserida na planilha.</span>}
-                    </p>
-                  )}
+                )}
+
+                {/* Último Movimento */}
+                <div className="p-4 rounded-xl border-2 border-slate-900 bg-[#ffdb58]/40">
+                  <div className="flex justify-between items-center text-xs font-black uppercase tracking-wider text-slate-800 mb-1">
+                    <span>Último Movimento Registrado</span>
+                    {selectedItem.dataUltMov && <span>{selectedItem.dataUltMov}</span>}
+                  </div>
+                  <p className="text-base font-black text-slate-900">
+                    {selectedItem.textoUltMov}
+                  </p>
                 </div>
 
-                {(() => {
-                  let parsedLinks = [];
-                  try {
-                    const rawLinks = getLinksAdicionais(selectedItem);
-                    if (rawLinks && rawLinks !== '-') parsedLinks = JSON.parse(rawLinks);
-                  } catch(e) {}
-                  
-                  const prefixModal = getNumero(selectedItem).split('/')[0].replace('.', '');
-                  const isProcessoModal = ['PL', 'PEC', 'PLC', 'PDL', 'PRC', 'MPV', 'VET', 'MSG', 'PSA'].includes(prefixModal);
+                {/* Ementa Completa */}
+                <div className="p-4 rounded-xl border-2 border-slate-900 bg-white">
+                  <p className="text-xs font-black uppercase tracking-wider text-slate-400 mb-1.5">
+                    Ementa Completa
+                  </p>
+                  <p className="text-sm sm:text-base font-bold text-slate-800 leading-relaxed whitespace-pre-wrap">
+                    {selectedItem.ementa || '-'}
+                  </p>
+                </div>
 
-                  if (parsedLinks.length > 0 && isProcessoModal) {
-                      const sitLowerModal = (getSituacao(selectedItem) || '').toLowerCase();
-                      const ultMovLowerModal = (getUltimoMovimento(selectedItem) || '').toLowerCase();
-                      const obsLowerModal = (getObservacoes(selectedItem) || '').toLowerCase();
-                      
-                      let isVetoModal = false;
-                      let isAprovadoLeiModal = false;
-                      
-                      const temPalavraVeto = sitLowerModal.includes('veto') || ultMovLowerModal.includes('veto') || obsLowerModal.includes('veto');
-                      let vetoLinkModal = parsedLinks.find(l => l.label.toLowerCase().includes('veto'));
-                      if (temPalavraVeto || vetoLinkModal) isVetoModal = true;
-                      
-                      const temPalavraLei = sitLowerModal.includes('lei') || sitLowerModal.includes('norma jurídica') || ultMovLowerModal.includes('transformado em lei') || ultMovLowerModal.includes('redação final');
-                      let leiLinkModal = parsedLinks.find(l => /\blei\b/i.test(l.label) || l.label.toLowerCase().includes('promulgad'));
-                      if ((temPalavraLei || leiLinkModal) && !isVetoModal) isAprovadoLeiModal = true;
+                {/* Grade de Detalhes de Tramitação */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-4 rounded-xl border border-slate-300 bg-[#f5f4ef] space-y-3">
+                    <div>
+                      <p className="text-[10px] font-black uppercase text-slate-500">Situação Atual</p>
+                      <p className="text-base font-black text-[#008080]">{selectedItem.situacao}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase text-slate-500">Setor / Comissão Atual</p>
+                      <p className="text-sm font-bold text-slate-900">{selectedItem.setor}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase text-slate-500">Última Verificação pelo Robô</p>
+                      <p className="text-xs font-bold text-slate-700">{formatarData(selectedItem.dataVerificacao)}</p>
+                    </div>
+                  </div>
 
-                      if (isVetoModal && vetoLinkModal) {
-                          if (vetoLinkModal.url) {
-                              return <div className="pt-4 border-t-[3px] border-black border-dashed flex flex-wrap gap-3"><a href={vetoLinkModal.url} target="_blank" rel="noreferrer" className="text-xs font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[3px] border-black px-4 py-2 flex items-center gap-2 hover:bg-red-800 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform hover:-translate-y-1">VETO (DIÁRIO OFICIAL)</a></div>;
-                          } else {
-                              return <div className="pt-4 border-t-[3px] border-black border-dashed flex flex-wrap gap-3"><span className="text-xs font-black uppercase tracking-wider bg-[#c41e3a] text-white border-[3px] border-black px-4 py-2 flex items-center gap-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">VETO REGISTRADO</span></div>;
-                          }
-                      } else if (isAprovadoLeiModal && leiLinkModal) {
-                          const numLei = extrairNumeroLei(selectedItem);
-                          const leiLabel = numLei ? <span className="text-[15px] font-black text-gray-800 flex items-center ml-2">Nº {numLei}</span> : null;
-
-                          if (leiLinkModal.url) {
-                              return <div className="pt-4 border-t-[3px] border-black border-dashed flex flex-wrap gap-3 items-center"><a href={leiLinkModal.url} target="_blank" rel="noreferrer" className="text-xs font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[3px] border-black px-4 py-2 flex items-center gap-2 hover:bg-[#0097a7] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-transform hover:-translate-y-1"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</a>{leiLabel}</div>;
-                          } else {
-                              return <div className="pt-4 border-t-[3px] border-black border-dashed flex flex-wrap gap-3 items-center"><span className="text-xs font-black uppercase tracking-wider bg-[#00bcd4] text-black border-[3px] border-black px-4 py-2 flex items-center gap-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><polyline points="20 6 9 17 4 12"/></svg> LEI APROVADA</span>{leiLabel}</div>;
-                          }
-                      }
-                  }
-                  return null;
-                })()}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {toastMsg && (
-        <div className="fixed bottom-6 right-6 p-4 border-[4px] border-black bg-[#ffdb58] text-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] z-50 flex items-center gap-3 animate-bounce">
-           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-           <span className="font-black uppercase text-sm">{toastMsg}</span>
-        </div>
-      )}
-    </div>
-  );
-}
+                  <div className="p-4 rounded-xl border border-slate-300 bg-[#f5f4ef] space-y-3">
+                    <div>
+                      <p className="text-[10px] font-black uppercase text-slate-500">Relator(a) na Comissão</p>
+                      <p className="text-sm font-black uppercase text-slate-900">
+                        {selectedItem.relator || 'Não designado'}
+                      </p>
+                      {selectedItem.dataDistribuicao && (
+                        <p className="text-xs font-bold text-slate-500">
+                          Distribuído em: {formatarData(selectedItem.dataDistribuicao)}
+                        </p>
+                      )}
+                      {selectedItem.infoRel
